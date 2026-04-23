@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap');
+
+.polyview-logo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #39FF14;
+    text-shadow:
+        0 0 6px rgba(57, 255, 20, 0.9),
+        0 0 14px rgba(57, 255, 20, 0.6),
+        0 0 30px rgba(57, 255, 20, 0.3),
+        0 0 60px rgba(57, 255, 20, 0.15);
+    padding: 12px 0 4px 0;
+    display: block;
+}
+
+.polyview-tagline {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(57, 255, 20, 0.45);
+    padding-bottom: 16px;
+    display: block;
+}
+
+.polyview-divider {
+    border: none;
+    border-top: 1px solid rgba(57, 255, 20, 0.2);
+    margin: 0 0 20px 0;
+    box-shadow: 0 0 8px rgba(57, 255, 20, 0.1);
+}

@@ -1,0 +1,22 @@
+/* Neon glow border around every Plotly chart */
+.stPlotlyChart {
+    border-radius: 10px;
+    border: 1px solid rgba(57, 255, 20, 0.15);
+    box-shadow:
+        0 0 12px rgba(57, 255, 20, 0.08),
+        0 0 30px rgba(0, 191, 255, 0.04),
+        0 4px 24px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+/* Subtle glow filter on the SVG itself */
+.stPlotlyChart > div > div > svg {
+    filter: drop-shadow(0 0 4px rgba(57, 255, 20, 0.12));
+}
+
+/* Styled divider */
+hr {
+    border-color: rgba(57, 255, 20, 0.12) !important;
+    margin: 24px 0 !important;
+}

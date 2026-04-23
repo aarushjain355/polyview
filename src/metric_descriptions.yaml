@@ -1,0 +1,71 @@
+RangeDistributionHealth:
+  description: >
+    Statistical spread of measured ranges across the ROI. A healthy distribution
+    has low variance and a tight spread around the expected distance to the target
+    surface. High std deviation suggests inconsistent depth measurements.
+
+LocalRoughnessKNN:
+  description: >
+    Surface roughness estimated by computing the mean deviation of each point from
+    its K nearest neighbours. Lower values indicate a smoother, more accurately
+    measured surface. High roughness may indicate noise or sensor artefacts.
+
+NearestNeighbourSpacing:
+  description: >
+    Spatial density of the point cloud, measured by inter-point distances. Tighter
+    spacing indicates higher spatial resolution and denser coverage of the target
+    surface. Large spacing may indicate sparse or uneven scanning.
+
+RangePrecision:
+  description: >
+    Repeatability of range measurements to a known surface across multiple scans.
+    Lower standard deviation indicates more consistent, precise measurements.
+    Evaluated separately for the green wall and whiteboard zones.
+
+TemporalConsistency:
+  description: >
+    Frame-to-frame stability of depth measurements on a static target. High
+    consistency (low std) means the sensor produces stable readings over time.
+    High variation suggests jitter or environmental sensitivity.
+
+ZoneSurfaceDepthError:
+  description: >
+    Difference between the measured surface depth and the ground-truth distance
+    to the target plane. Lower error indicates better absolute range accuracy.
+    Captures systematic bias in the sensor's depth output.
+
+SurfaceFitResidual:
+  description: >
+    RMS residual of a plane fitted to the measured points on a flat target surface.
+    Low residual means the sensor faithfully reproduces a planar surface as flat.
+    High residual suggests warping, noise, or beam divergence artefacts.
+
+IntensityUniformity:
+  description: >
+    Uniformity of intensity returns across a homogeneous surface, expressed as
+    the coefficient of variation (CV). Low CV indicates consistent intensity
+    calibration across the sensor's FOV.
+
+ZoneIntensityMean:
+  description: >
+    Mean intensity return per target zone. Used to evaluate reflectivity
+    discrimination between surfaces of differing material or colour. Also captures
+    the ratio error between the whiteboard and green wall returns.
+
+SpatialDropout:
+  description: >
+    Fraction of expected points within the ROI that were not returned by the sensor.
+    High dropout indicates missed detections, occlusion, or shadow artefacts on
+    low-reflectivity surfaces.
+
+PointYieldPerZone:
+  description: >
+    Fraction of the expected point budget actually measured in each zone. Higher
+    yield means more complete spatial coverage of the target. Low yield may indicate
+    beam misalignment or insufficient motor sweep coverage.
+
+NoiseRegionContamination:
+  description: >
+    Fraction of points appearing in known background or noise regions outside the
+    intended target. High contamination indicates ghost points, multipath returns,
+    or bleed-over from adjacent surfaces.

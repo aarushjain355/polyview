@@ -1,0 +1,111 @@
+category_units:
+  RangeDistributionHealth: m
+  LocalRoughnessKNN: m
+  NearestNeighbourSpacing: m
+  RangePrecision: m
+  TemporalConsistency: m
+  ZoneSurfaceDepthError: m
+  SurfaceFitResidual: m
+  IntensityUniformity: intensity units
+  ZoneIntensityMean: intensity
+  SpatialDropout: fraction
+  PointYieldPerZone: fraction
+  NoiseRegionContamination: fraction
+
+box_mappings:
+  RangeDistributionHealth:
+    low: range_min
+    q1: range_p10
+    median: range_p50
+    q3: range_p90
+    high: range_p99
+    mean: range_mean
+    std: range_std
+
+error_bar_mappings:
+  LocalRoughnessKNN:
+    - label: rough mean
+      mean_key: rough_mean
+      std_key: rough_std
+  NearestNeighbourSpacing:
+    - label: nn p50
+      mean_key: nn_p50
+      std_key: null
+    - label: nn p90
+      mean_key: nn_p90
+      std_key: null
+    - label: nn p99
+      mean_key: nn_p99
+      std_key: null
+    - label: nn mean
+      mean_key: nn_mean
+      std_key: null
+  RangePrecision:
+    - label: green_wall
+      mean_key: green_wall_range_precision_mean
+      std_key: green_wall_range_precision_std
+    - label: whiteboard
+      mean_key: whiteboard_range_precision_mean
+      std_key: whiteboard_range_precision_std
+  TemporalConsistency:
+    - label: green_wall
+      mean_key: green_wall_depth_temporal_mean
+      std_key: green_wall_depth_temporal_std
+    - label: whiteboard
+      mean_key: whiteboard_depth_temporal_mean
+      std_key: whiteboard_depth_temporal_std
+  ZoneIntensityMean:
+    - label: green_wall
+      mean_key: green_wall_intensity_mean
+      std_key: green_wall_intensity_std
+    - label: whiteboard
+      mean_key: whiteboard_intensity_mean
+      std_key: whiteboard_intensity_std
+
+fraction_metrics:
+  SpatialDropout:
+    - green_wall_dropout_frac
+    - whiteboard_dropout_frac
+  PointYieldPerZone:
+    - green_wall_yield_frac
+    - whiteboard_yield_frac
+  NoiseRegionContamination:
+    - noise_contamination_frac
+
+radar_metrics:
+  IntensityUniformity:
+    key: green_wall_intensity_cv
+    lower_is_better: true
+  LocalRoughnessKNN:
+    key: rough_mean
+    lower_is_better: true
+  NearestNeighbourSpacing:
+    key: nn_mean
+    lower_is_better: true
+  NoiseRegionContamination:
+    key: noise_contamination_frac
+    lower_is_better: true
+  PointYieldPerZone:
+    key: green_wall_yield_frac
+    lower_is_better: false
+  RangeDistributionHealth:
+    key: range_std
+    lower_is_better: true
+  RangePrecision:
+    key: green_wall_range_precision_std
+    lower_is_better: true
+  SpatialDropout:
+    key: green_wall_dropout_frac
+    lower_is_better: true
+  SurfaceFitResidual:
+    key: green_wall_fit_rms
+    lower_is_better: true
+  TemporalConsistency:
+    key: green_wall_depth_temporal_std
+    lower_is_better: true
+  ZoneIntensityMean:
+    key: whiteboard_to_green_wall_ratio_error
+    lower_is_better: true
+  ZoneSurfaceDepthError:
+    key: green_wall_depth_error_std
+    lower_is_better: true
