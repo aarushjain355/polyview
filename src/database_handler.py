@@ -141,7 +141,14 @@ class DatabaseHandler:
         return result
 
     def _decode_cloud(self, encoded: str) -> np.ndarray:
-        return np.frombuffer(base64.b64decode(encoded), dtype=np.float32).reshape(-1, 4)
+        raw = np.frombuffer(base64.b64decode(encoded), dtype=np.float32)
+        n = len(raw)
+        if n % 4 == 0:
+            return raw.reshape(-1, 4)
+        if n % 3 == 0:
+            xyz = raw.reshape(-1, 3)
+            return np.hstack([xyz, np.zeros((len(xyz), 1), dtype=np.float32)])
+        raise ValueError(f'Point cloud buffer has {n} floats, not divisible by 3 or 4')
 
     def _parse_page_blocks(self, page_id: str) -> dict:
         metrics: dict = {}
