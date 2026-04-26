@@ -1,0 +1,21 @@
+# Per-lidar threshold overrides.
+# Lidar name must match the test case name exactly as it appears in Notion (see folder: in lidar_configs/*.yaml).
+# Only specify metrics that need different zones — everything else falls back to settings.yaml.
+
+# E1R (Robosense) — whiteboard at 80 in = 2.032 m
+E1R:
+  RangeDistributionHealth:
+    great: {enabled: true,  min: 1.93,   max: 2.08,  label: 'Accurate'}
+    ok_1:  {enabled: true,  min: 2.08,  max: 2.3,  label: 'Slightly Farther'}
+    ok_2:  {enabled: true, min: 1.8,   max: 1.93,   label: 'Slightly Near'}
+    bad_1: {enabled: true,  min: 2.3,  max: 2.5,   label: 'Way Farther'}
+    bad_2: {enabled: true, min: 1.5,   max: 1.8,   label: 'Way Near'}
+
+# Hesai — whiteboard at 93 in = 2.362 m
+Hesai:
+  RangeDistributionHealth:
+    great: {enabled: true,  min: 2.3,   max: 2.41,  label: 'Accurate'}
+    ok_1:  {enabled: true,  min: 2.41,  max: 2.55,  label: 'Slightly Farther'}
+    ok_2:  {enabled: true, min: 2.15,   max: 2.3,   label: 'Slightly Near'}
+    bad_1: {enabled: true,  min: 2.55,  max: 2.65,   label: 'Way Farther'}
+    bad_2: {enabled: true, min: 2.0,   max: 2.15,   label: 'Way Near'}

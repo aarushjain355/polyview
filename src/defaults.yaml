@@ -1,0 +1,70 @@
+thresholds:
+  RangeDistributionHealth:
+    great:  {enabled: false, min: 0.0,   max: 0.01,  label: 'Tight'}
+    ok_1:   {enabled: false, min: 0.01,  max: 0.05,  label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.05,  max: 1.0,   label: 'Poor'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  LocalRoughnessKNN:
+    great:  {enabled: false, min: 0.0,   max: 0.002, label: 'Smooth'}
+    ok_1:   {enabled: false, min: 0.002, max: 0.008, label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.008, max: 0.1,   label: 'Noisy'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  NearestNeighbourSpacing:
+    great:  {enabled: false, min: 0.0,   max: 0.02,  label: 'Dense'}
+    ok_1:   {enabled: false, min: 0.02,  max: 0.05,  label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.05,  max: 0.5,   label: 'Sparse'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  RangePrecision:
+    great:  {enabled: false, min: 0.0,   max: 0.003, label: 'Precise'}
+    ok_1:   {enabled: false, min: 0.003, max: 0.01,  label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.01,  max: 0.1,   label: 'Imprecise'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  TemporalConsistency:
+    great:  {enabled: false, min: 0.0,   max: 0.003, label: 'Stable'}
+    ok_1:   {enabled: false, min: 0.003, max: 0.015, label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.015, max: 0.5,   label: 'Unstable'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  ZoneSurfaceDepthError:
+    great:  {enabled: false, min: 0.0,   max: 0.01,  label: 'Accurate'}
+    ok_1:   {enabled: false, min: 0.01,  max: 0.05,  label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.05,  max: 1.0,   label: 'Offset'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  SurfaceFitResidual:
+    great:  {enabled: false, min: 0.0,   max: 0.002, label: 'Flat'}
+    ok_1:   {enabled: false, min: 0.002, max: 0.007, label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.007, max: 0.1,   label: 'Warped'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  SpatialDropout:
+    great:  {enabled: false, min: 0.0,   max: 0.02,  label: 'Healthy'}
+    ok_1:   {enabled: false, min: 0.02,  max: 0.08,  label: 'Acceptable'}
+    ok_2:   {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+    bad_1:  {enabled: false, min: 0.08,  max: 1.0,   label: 'Dropping'}
+    bad_2:  {enabled: false, min: 0.0,   max: 0.0,   label: ''}
+
+  PointYieldPerZone:
+    - keys: [whiteboard_yield_frac]
+      great:  {enabled: false, min: 0.75, max: 1.0,  label: 'Good'}
+      ok_1:   {enabled: false, min: 0.5,  max: 0.75, label: 'Partial'}
+      ok_2:   {enabled: false, min: 0.0,  max: 0.0,  label: ''}
+      bad_1:  {enabled: false, min: 0.0,  max: 0.5,  label: 'Low Yield'}
+      bad_2:  {enabled: false, min: 0.0,  max: 0.0,  label: ''}
+    - keys: [green_wall_yield_frac]
+      great:  {enabled: false, min: 0.2,  max: 1.0,  label: 'Good'}
+      ok_1:   {enabled: false, min: 0.1,  max: 0.2,  label: 'Partial'}
+      ok_2:   {enabled: false, min: 0.0,  max: 0.0,  label: ''}
+      bad_1:  {enabled: false, min: 0.0,  max: 0.1,  label: 'Low Yield'}
+      bad_2:  {enabled: false, min: 0.0,  max: 0.0,  label: ''}

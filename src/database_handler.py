@@ -23,11 +23,13 @@ class DatabaseHandler:
         if not self.available:
             return {}
         pages = self._fetch_pages()
+        print(f'[PolyView] all page names: {list(pages.keys())}')
         result = {}
         for name, page_id in pages.items():
             if name.endswith('_VisualizationResults'):
                 lidar_name = name[: -len('_VisualizationResults')]
                 result[lidar_name] = self._parse_viz_blocks(page_id)
+        print(f'[PolyView] visualization keys: {list(result.keys())}')
         return result
 
     def retrieve_data(self) -> dict[str, dict]:
@@ -86,7 +88,7 @@ class DatabaseHandler:
         return blocks
 
     def _parse_viz_blocks(self, page_id: str) -> dict:
-        result: dict = {'profile_plane': {}, 'orientation': {}, 'fitted_planes': {}, 'roi_cloud': None, 'filtered_roi_cloud': None}
+        result: dict = {'profile_plane': {}, 'orientation': {}, 'fitted_planes': {}, 'dead_cells': {}, 'roi_cloud': None, 'filtered_roi_cloud': None}
         current_section: str | None = None
         is_cloud: bool = False
         current_cloud_key: str | None = None
@@ -94,7 +96,12 @@ class DatabaseHandler:
 
         def _flush_cloud():
             if is_cloud and cloud_chunks and current_cloud_key:
-                result[current_cloud_key] = self._decode_cloud(''.join(cloud_chunks))
+                try:
+                    decoded = self._decode_cloud(''.join(cloud_chunks))
+                    result[current_cloud_key] = decoded
+                    print(f'[PolyView] decoded cloud key="{current_cloud_key}" points={len(decoded)}')
+                except Exception as e:
+                    print(f'[PolyView] ERROR decoding cloud key="{current_cloud_key}": {e}')
                 cloud_chunks.clear()
 
         for block in self._fetch_all_blocks(page_id):
@@ -105,6 +112,7 @@ class DatabaseHandler:
                 if not rt:
                     continue
                 heading = rt[0]['text']['content']
+                print(f'[PolyView] heading="{heading}"')
                 if 'base64' in heading:
                     current_cloud_key = heading.split(' ·')[0].strip()
                     is_cloud = True
@@ -118,6 +126,8 @@ class DatabaseHandler:
                         current_section = 'orientation'
                     elif 'FittedPlane' in heading:
                         current_section = 'fitted_planes'
+                    elif 'DeadCells' in heading:
+                        current_section = 'dead_cells'
                     else:
                         current_section = None
             elif btype == 'bulleted_list_item' and current_section:
@@ -138,10 +148,13 @@ class DatabaseHandler:
                     cloud_chunks.append(rt[0]['text']['content'])
 
         _flush_cloud()
+        print(f'[PolyView] viz parse done: roi_cloud={result["roi_cloud"] is not None} filtered_roi_cloud={result["filtered_roi_cloud"] is not None} keys={list(result.keys())}')
         return result
 
     def _decode_cloud(self, encoded: str) -> np.ndarray:
-        raw = np.frombuffer(base64.b64decode(encoded), dtype=np.float32)
+        cleaned = encoded.strip()
+        cleaned += '=' * (-len(cleaned) % 4)
+        raw = np.frombuffer(base64.b64decode(cleaned), dtype=np.float32)
         n = len(raw)
         if n % 4 == 0:
             return raw.reshape(-1, 4)

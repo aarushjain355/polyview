@@ -1,0 +1,61 @@
+count_bar_color: 'rgba(150,120,255,0.85)'
+
+zone_fill_colors:
+  great: 'rgba(57,255,20,0.22)'
+  ok_1:  'rgba(255,220,0,0.25)'
+  ok_2:  'rgba(255,100,0,0.25)'
+  bad_1: 'rgba(255,50,50,0.25)'
+  bad_2: 'rgba(160,0,200,0.25)'
+
+zone_legend_colors:
+  great: 'rgba(57,255,20,0.9)'
+  ok_1:  'rgba(255,220,0,0.9)'
+  ok_2:  'rgba(255,100,0,0.9)'
+  bad_1: 'rgba(255,50,50,0.9)'
+  bad_2: 'rgba(160,0,200,0.9)'
+
+palette:
+  - '#00BFFF'
+  - '#00BFFF'
+  - '#FF6B6B'
+  - '#FFD700'
+  - '#DA70D6'
+  - '#FF8C00'
+  - '#00FA9A'
+  - '#FF69B4'
+
+metric_chart:
+  height: 280
+  margin_top: 55
+  margin_bottom: 100
+  margin_left: 60
+  margin_right: 160
+  label_y_paper: 1.08
+  label_font_size: 9
+  tick_font_size: 10
+  tick_angle: -35
+  bar_border_color: 'rgba(255,255,255,0.3)'
+  bar_border_width: 0.5
+  zone_border_width: 1.5
+  legend_font_size: 9
+  legend_marker_size: 10
+  legend_x: 1.02
+  legend_y: 1.0
+  legend_xanchor: 'left'
+  legend_yanchor: 'top'
+
+layout:
+  template: 'plotly_dark'
+  title: 'LiDAR Metrics Comparison'
+  title_font_size: 26
+  legend_title: 'LiDAR'
+  legend_font_size: 13
+  subplot_vertical_spacing: 0.06
+  subplot_height_per_row: 550
+  subplot_title_font_size: 16
+  bar_opacity: 0.85
+  axis_label_font_size: 12
+  tick_font_size: 11
+  bar_text_font_size: 11
+  background_color: '#0e1117'
+  paper_color: '#0e1117'

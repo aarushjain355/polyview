@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
+/* ── Logo ──────────────────────────────────────────────────────── */
 .polyview-logo {
     font-family: 'Orbitron', sans-serif;
     font-size: 28px;
@@ -32,4 +34,134 @@
     border-top: 1px solid rgba(57, 255, 20, 0.2);
     margin: 0 0 20px 0;
     box-shadow: 0 0 8px rgba(57, 255, 20, 0.1);
+}
+
+/* ── Global font ───────────────────────────────────────────────── */
+html, body, [class*="css"] {
+    font-family: 'Share Tech Mono', monospace !important;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: rgba(4, 6, 12, 0.97) !important;
+    border-right: 1px solid rgba(57, 255, 20, 0.12) !important;
+}
+
+/* ── Main area ─────────────────────────────────────────────────── */
+.main .block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+.stButton > button {
+    background: transparent !important;
+    border: 1px solid rgba(57, 255, 20, 0.35) !important;
+    color: rgba(57, 255, 20, 0.85) !important;
+    border-radius: 5px !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    letter-spacing: 1px !important;
+    transition: all 0.18s ease !important;
+}
+
+.stButton > button:hover {
+    background: rgba(57, 255, 20, 0.07) !important;
+    border-color: rgba(57, 255, 20, 0.75) !important;
+    color: #39FF14 !important;
+    box-shadow: 0 0 14px rgba(57, 255, 20, 0.25) !important;
+}
+
+/* ── Selectboxes ───────────────────────────────────────────────── */
+[data-testid="stSelectbox"] > div > div {
+    background: rgba(8, 10, 18, 0.9) !important;
+    border: 1px solid rgba(57, 255, 20, 0.18) !important;
+    border-radius: 5px !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: rgba(57, 255, 20, 0.5) !important;
+    box-shadow: 0 0 8px rgba(57, 255, 20, 0.15) !important;
+}
+
+/* ── Multiselect ───────────────────────────────────────────────── */
+[data-testid="stMultiSelect"] > div > div {
+    background: rgba(8, 10, 18, 0.9) !important;
+    border: 1px solid rgba(57, 255, 20, 0.18) !important;
+    border-radius: 5px !important;
+}
+
+/* ── Subheaders ────────────────────────────────────────────────── */
+h3 {
+    color: rgba(57, 255, 20, 0.8) !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    font-size: 12px !important;
+    font-family: 'Share Tech Mono', monospace !important;
+}
+
+/* ── Expanders ─────────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    border: 1px solid rgba(57, 255, 20, 0.1) !important;
+    border-radius: 6px !important;
+    background: rgba(8, 10, 18, 0.5) !important;
+    margin-bottom: 6px !important;
+}
+
+[data-testid="stExpander"] summary {
+    color: rgba(255, 255, 255, 0.75) !important;
+    letter-spacing: 1px !important;
+}
+
+/* ── Success / info / warning alerts ──────────────────────────── */
+[data-testid="stAlert"][data-baseweb="notification"] {
+    border-radius: 6px !important;
+}
+
+div[data-testid="stSuccessMessage"],
+div.stSuccess {
+    background: rgba(57, 255, 20, 0.07) !important;
+    border: 1px solid rgba(57, 255, 20, 0.3) !important;
+    border-radius: 6px !important;
+}
+
+div[data-testid="stInfoMessage"],
+div.stInfo {
+    background: rgba(0, 191, 255, 0.07) !important;
+    border: 1px solid rgba(0, 191, 255, 0.25) !important;
+    border-radius: 6px !important;
+}
+
+/* ── Form inputs (settings page) ──────────────────────────────── */
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input {
+    background: rgba(8, 10, 18, 0.9) !important;
+    border: 1px solid rgba(57, 255, 20, 0.15) !important;
+    border-radius: 4px !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-family: 'Share Tech Mono', monospace !important;
+}
+
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextInput"] input:focus {
+    border-color: rgba(57, 255, 20, 0.45) !important;
+    box-shadow: 0 0 6px rgba(57, 255, 20, 0.12) !important;
+}
+
+/* ── Checkboxes ────────────────────────────────────────────────── */
+[data-testid="stCheckbox"] > label > div:first-child {
+    border-color: rgba(57, 255, 20, 0.35) !important;
+    background: rgba(8, 10, 18, 0.9) !important;
+    border-radius: 3px !important;
+}
+
+/* ── Dividers ──────────────────────────────────────────────────── */
+hr {
+    border-color: rgba(57, 255, 20, 0.1) !important;
+    margin: 20px 0 !important;
+}
+
+/* ── Spinner ───────────────────────────────────────────────────── */
+[data-testid="stSpinner"] > div {
+    border-top-color: #39FF14 !important;
 }

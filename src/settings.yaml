@@ -1,0 +1,321 @@
+plot_y_padding: 0.3
+secondary_axis_keys:
+- rough_n
+- green_wall_point_count
+- whiteboard_point_count
+- green_wall_dropout_cell_count
+- whiteboard_dropout_cell_count
+- green_wall_total_cell_count
+- whiteboard_total_cell_count
+- range_std
+split_by_suffix_categories:
+- TemporalConsistency
+- SurfaceFitResidual
+- RangePrecision
+split_exclude_suffixes:
+  RangePrecision:
+  - mean
+  TemporalConsistency:
+  - mean
+thresholdable_metrics:
+- RangeDistributionHealth
+- LocalRoughnessKNN
+- NearestNeighbourSpacing
+- RangePrecision
+- TemporalConsistency
+- ZoneSurfaceDepthError
+- SurfaceFitResidual
+- RangePrecision
+- "SurfaceFitResidual \xB7 offset"
+- SpatialDropout
+- PointYieldPerZone
+thresholds:
+  LocalRoughnessKNN:
+    bad_1:
+      enabled: true
+      label: Noisy
+      max: 0.1
+      min: 0.008
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Smooth
+      max: 0.002
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.008
+      min: 0.002
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  NearestNeighbourSpacing:
+    bad_1:
+      enabled: true
+      label: Sparse
+      max: 0.5
+      min: 0.05
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Dense
+      max: 0.02
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.05
+      min: 0.02
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  PointYieldPerZone:
+  - bad_1:
+      enabled: true
+      label: Low Yield
+      max: 0.5
+      min: 0.0
+    bad_2:
+      enabled: true
+      label: High Yield
+      max: 1.0
+      min: 0.9
+    great:
+      enabled: true
+      label: Good
+      max: 0.79
+      min: 0.75
+    keys:
+    - whiteboard_yield_frac
+    ok_1:
+      enabled: true
+      label: Partially low
+      max: 0.75
+      min: 0.5
+    ok_2:
+      enabled: true
+      label: Partially high
+      max: 0.9
+      min: 0.79
+  - bad_1:
+      enabled: true
+      label: Low Yield
+      max: 0.1
+      min: 0.0
+    bad_2:
+      enabled: true
+      label: High Yield
+      max: 1.0
+      min: 0.5
+    great:
+      enabled: true
+      label: Good
+      max: 0.3
+      min: 0.2
+    keys:
+    - green_wall_yield_frac
+    ok_1:
+      enabled: true
+      label: Partially low
+      max: 0.2
+      min: 0.1
+    ok_2:
+      enabled: true
+      label: Partially high
+      max: 0.5
+      min: 0.3
+  RangeDistributionHealth:
+    bad_1:
+      enabled: true
+      label: Poor
+      max: 1.0
+      min: 0.05
+    bad_2:
+      enabled: true
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Tight
+      max: 0.01
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.05
+      min: 0.01
+    ok_2:
+      enabled: true
+      label: ''
+      max: 0.0
+      min: 0.0
+  RangePrecision:
+    bad_1:
+      enabled: true
+      label: Imprecise
+      max: 0.1
+      min: 0.01
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Precise
+      max: 0.003
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.01
+      min: 0.003
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  SpatialDropout:
+    bad_1:
+      enabled: true
+      label: Dropping
+      max: 1.0
+      min: 0.08
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Healthy
+      max: 0.02
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.08
+      min: 0.02
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  SurfaceFitResidual:
+    bad_1:
+      enabled: true
+      label: Warped
+      max: 0.1
+      min: 0.02
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Flat
+      max: 0.005
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.02
+      min: 0.005
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  "SurfaceFitResidual \xB7 offset":
+    bad_1:
+      enabled: true
+      label: Misaligned
+      max: 1.0
+      min: 0.03
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Aligned
+      max: 0.01
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.03
+      min: 0.01
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  TemporalConsistency:
+    bad_1:
+      enabled: true
+      label: Unstable
+      max: 0.5
+      min: 0.015
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Stable
+      max: 0.003
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.015
+      min: 0.003
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+  ZoneSurfaceDepthError:
+    bad_1:
+      enabled: true
+      label: Offset
+      max: 1.0
+      min: 0.05
+    bad_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
+    great:
+      enabled: true
+      label: Accurate
+      max: 0.01
+      min: 0.0
+    ok_1:
+      enabled: true
+      label: Acceptable
+      max: 0.05
+      min: 0.01
+    ok_2:
+      enabled: false
+      label: ''
+      max: 0.0
+      min: 0.0
