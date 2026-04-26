@@ -53,7 +53,7 @@ class PolyViewApp:
 
     def render_3d_view(self):
         if not st.session_state.visualization_data:
-            st.info('No visualization data loaded. Click "Refresh LiDAR Data from Notion".')
+            st.info('No visualization data loaded. Click "Retrieve Results".')
             return
         self.render_3d_button_panel()
         st.markdown(self.visualization_handler.glow_css, unsafe_allow_html=True)
@@ -156,7 +156,7 @@ class PolyViewApp:
             st.plotly_chart(fig, use_container_width=True, key=f'metrics_{self.selected_lidar}_{category}')
 
     def render_lidar_refresh_button(self):
-        if st.button("Refresh LiDAR Data from Notion"):
+        if st.button("Retrieve Results"):
             with st.spinner("Fetching latest test results..."):
                 self.retrieve_notion_data()
                 time.sleep(1)  # Simulate loading time
