@@ -304,6 +304,16 @@ class VisualizationHandler:
                     )
                 if not is_counts:
                     self._apply_threshold_bands(fig, title, category, fig_items, thresholds, y_range)
+                unit = '#' if is_counts else self._schemas['category_units'].get(category, '')
+                if unit:
+                    fig.add_annotation(
+                        text=f'<b>({unit})</b>',
+                        xref='paper', yref='paper',
+                        x=0, y=0,
+                        showarrow=False,
+                        xanchor='right', yanchor='top',
+                        font=dict(size=11, color='rgba(255,255,255,0.8)'),
+                    )
                 fig.update_layout(
                     title=dict(text=f'<b>{title}</b>', font=dict(color='#39FF14', size=13), x=0.0),
                     paper_bgcolor=layout['paper_color'],
@@ -323,11 +333,6 @@ class VisualizationHandler:
                         zerolinecolor='rgba(255,255,255,0.15)',
                         tickformat='.3g',
                         range=y_range,
-                        title=dict(
-                            text=self._schemas['category_units'].get(category, ''),
-                            font=dict(size=11, color='rgba(255,255,255,0.5)'),
-                            standoff=5,
-                        ),
                     ),
                     showlegend=True,
                     legend=dict(
@@ -409,7 +414,7 @@ class VisualizationHandler:
                 showlegend=True,
             ))
 
-    def render_overview_radar(self, metrics_data: dict) -> go.Figure:
+    def render_overview_radar(self, metrics_data: dict, per_lidar_thresholds: dict = None, exclude_categories: set = None) -> go.Figure:
         if not metrics_data:
             return go.Figure()
 
@@ -420,7 +425,8 @@ class VisualizationHandler:
         radar_metrics = self._schemas['radar_metrics']
         radar_categories = [
             cat for cat in radar_metrics
-            if any(radar_metrics[cat]['key'] in metrics_data[l].get(cat, {}) for l in lidar_names)
+            if cat not in (exclude_categories or set())
+            and any(radar_metrics[cat]['key'] in metrics_data[l].get(cat, {}) for l in lidar_names)
         ]
         if not radar_categories:
             return go.Figure()
@@ -434,16 +440,39 @@ class VisualizationHandler:
 
         fig = go.Figure()
 
+        # Background zone rings — drawn outside-in so inner polygons cover outer ones
+        theta_ring = radar_categories + [radar_categories[0]]
+        for r_val, fill_color, border_color in [
+            (1.0,  'rgba(57,255,20,0.13)',  'rgba(57,255,20,0.30)'),
+            (0.75, 'rgba(255,200,0,0.15)',  'rgba(255,200,0,0.35)'),
+            (0.40, 'rgba(255,50,50,0.18)',  'rgba(255,50,50,0.40)'),
+        ]:
+            fig.add_trace(go.Scatterpolar(
+                r=[r_val] * len(theta_ring),
+                theta=theta_ring,
+                fill='toself',
+                fillcolor=fill_color,
+                line=dict(width=0.8, color=border_color),
+                showlegend=False,
+                hoverinfo='skip',
+            ))
+
         for lidar_idx, lidar_name in enumerate(lidar_names):
             scores = []
+            lidar_thresholds = (per_lidar_thresholds or {}).get(lidar_name, {})
             for cat in radar_categories:
                 key = radar_metrics[cat]['key']
                 lower_is_better = radar_metrics[cat]['lower_is_better']
-                vals = raw[cat]
-                mn, mx = min(vals), max(vals)
                 val = float(metrics_data[lidar_name].get(cat, {}).get(key, 0) or 0)
-                norm = (val - mn) / (mx - mn) if mx != mn else 0.5
-                scores.append(round((1 - norm) if lower_is_better else norm, 3))
+
+                abs_score = self._radar_score(val, key, lower_is_better, lidar_thresholds.get(cat))
+                if abs_score is not None:
+                    scores.append(round(abs_score, 3))
+                else:
+                    vals = raw[cat]
+                    mn, mx = min(vals), max(vals)
+                    norm = (val - mn) / (mx - mn) if mx != mn else 0.5
+                    scores.append(round((1 - norm) if lower_is_better else norm, 3))
 
             theta = radar_categories + [radar_categories[0]]
             r = scores + [scores[0]]
@@ -453,7 +482,7 @@ class VisualizationHandler:
                 r=r,
                 theta=theta,
                 fill='toself',
-                fillcolor=self._hex_to_rgba(color, 0.18),
+                fillcolor=self._hex_to_rgba(color, 0.22),
                 line=dict(color=color, width=3),
                 marker=dict(size=7, color=color, symbol='circle', line=dict(color='white', width=1.5)),
                 name=lidar_name,
@@ -462,14 +491,15 @@ class VisualizationHandler:
 
         fig.update_layout(
             polar=dict(
-                bgcolor='rgba(10,12,20,0.6)',
+                bgcolor='rgba(10,12,20,0.85)',
                 radialaxis=dict(
                     visible=True,
                     range=[0, 1],
-                    tickfont=dict(size=9, color='rgba(255,255,255,0.3)'),
-                    gridcolor='rgba(255,255,255,0.06)',
+                    tickfont=dict(size=9, color='rgba(255,255,255,0.55)'),
+                    gridcolor='rgba(255,255,255,0.08)',
                     linecolor='rgba(255,255,255,0.06)',
-                    tickvals=[0.25, 0.5, 0.75, 1.0],
+                    tickvals=[0.20, 0.575, 0.875],
+                    ticktext=['bad', 'ok', 'great'],
                 ),
                 angularaxis=dict(
                     tickfont=dict(size=13, color='rgba(255,255,255,0.9)', family='sans-serif'),
@@ -490,9 +520,9 @@ class VisualizationHandler:
                 itemdoubleclick='toggle',
             ),
             paper_bgcolor=layout['paper_color'],
-            height=600,
+            height=620,
             title=dict(
-                text='<b>Overall LiDAR Performance</b>  ·  normalized score per category  ·  1.0 = best in group',
+                text='<b>Overall LiDAR Performance</b>  ·  green = great  ·  yellow = ok  ·  red = bad',
                 font=dict(size=14, color='rgba(255,255,255,0.65)', family='sans-serif'),
                 x=0.5, xanchor='center',
             ),
@@ -507,13 +537,18 @@ class VisualizationHandler:
         if not categories:
             return go.Figure()
 
+        _deprioritised = {'NoiseRegionContamination', 'ZoneIntensityMean', 'IntensityUniformity'}
+        categories = {
+            **{k: v for k, v in categories.items() if k not in _deprioritised},
+            **{k: v for k, v in categories.items() if k in _deprioritised},
+        }
+
         layout = self._config['layout']
         lidar_names = list(metrics_data.keys())
         colors = self._colors(len(lidar_names))
         n_rows = len(categories)
 
-        max_spacing = 1.0 / n_rows if n_rows > 1 else 1.0
-        vertical_spacing = min(layout['subplot_vertical_spacing'], max_spacing * 0.85)
+        vertical_spacing = min(layout['subplot_vertical_spacing'], 1.0 / (2 * max(n_rows - 1, 1)))
 
         fig = make_subplots(
             rows=n_rows, cols=1,
@@ -533,13 +568,13 @@ class VisualizationHandler:
 
             self._style_axes(fig, row, layout, category)
 
-        for annotation in fig.layout.annotations:
+        title_annotations = [a for a in fig.layout.annotations if a.yref == 'paper']
+        for annotation in title_annotations:
             annotation.font = dict(size=layout['subplot_title_font_size'], color='#39FF14', family='sans-serif')
             annotation.bgcolor = 'rgba(57,255,20,0.07)'
             annotation.bordercolor = 'rgba(57,255,20,0.2)'
             annotation.borderwidth = 1
             annotation.borderpad = 7
-            annotation.y += 0.02
 
         fig.update_layout(
             height=layout['subplot_height_per_row'] * n_rows,
@@ -623,6 +658,7 @@ class VisualizationHandler:
         mapping = self._schemas['error_bar_mappings'][category]
         zones = [z['label'] for z in mapping]
         n_lidars = len(lidar_names)
+        bar_slot_width = 0.72 * 0.94 / n_lidars
         for lidar_idx, lidar_name in enumerate(lidar_names):
             d = metrics_data[lidar_name].get(category, {})
             means = [d.get(z['mean_key'], 0) for z in mapping]
@@ -642,15 +678,14 @@ class VisualizationHandler:
                 showlegend=(row == 1),
             ), row=row, col=1)
 
-            bar_slot_width = 0.72 * 0.94 / n_lidars
             x_offset = (lidar_idx - (n_lidars - 1) / 2) * bar_slot_width
-            for zone_idx, (zone, mean, std) in enumerate(zip(zones, means, stds)):
+            for zone_idx, (mean, std) in enumerate(zip(means, stds)):
                 fig.add_annotation(
                     x=zone_idx + x_offset, y=mean + std,
-                    text=f'<b>{mean:.4g}</b>',
+                    text=f'{mean:.4g}',
                     yshift=10,
                     showarrow=False,
-                    font=dict(size=10, color='white', family='monospace'),
+                    font=dict(size=10, color='rgba(255,255,255,0.85)', family='monospace'),
                     xanchor='center', yanchor='bottom',
                     row=row, col=1,
                 )
@@ -669,7 +704,7 @@ class VisualizationHandler:
                 marker=self._gradient_marker(fracs, color),
                 text=[f'{f * 100:.2f}%' for f in fracs],
                 textposition='outside',
-                textfont=dict(size=11, color='white', family='monospace'),
+                textfont=dict(size=10, color='rgba(255,255,255,0.85)', family='monospace'),
                 hovertemplate=f'<b>{lidar_name}</b><br>%{{x}}: <b>%{{y:.3%}}</b><extra></extra>',
                 showlegend=(row == 1),
             ), row=row, col=1)
@@ -694,7 +729,7 @@ class VisualizationHandler:
                 marker=self._gradient_marker(values, color),
                 text=[f'{v:.4g}' for v in values],
                 textposition='outside',
-                textfont=dict(size=11, color='white', family='monospace'),
+                textfont=dict(size=10, color='rgba(255,255,255,0.85)', family='monospace'),
                 hovertemplate=f'<b>{lidar_name}</b><br>%{{x}}: <b>%{{y:.6g}}</b><extra></extra>',
                 showlegend=(row == 1),
             ), row=row, col=1)
@@ -751,3 +786,54 @@ class VisualizationHandler:
     def _colors(self, n: int) -> list[str]:
         palette = self._config['palette']
         return [palette[i % len(palette)] for i in range(n)]
+
+    def _score_against_zones(self, val: float, zones: dict, lower_is_better: bool) -> float | None:
+        # Zone scores aligned with radar ring boundaries (bad<0.40, ok 0.40-0.75, great>0.75)
+        ZONE_SCORES = {'great': 1.0, 'ok_1': 0.65, 'ok_2': 0.50, 'bad_1': 0.28, 'bad_2': 0.12}
+        enabled = []
+        for name, score in ZONE_SCORES.items():
+            z = zones.get(name, {})
+            if z.get('enabled') and float(z.get('max', 0)) > float(z.get('min', 0)):
+                mn, mx = float(z['min']), float(z['max'])
+                enabled.append((mn, mx, score))
+        if not enabled:
+            return None
+        # Build piecewise-linear breakpoints from zone midpoints so similar values
+        # on either side of a zone boundary get similar scores (no cliffs)
+        enabled.sort(key=lambda t: t[0], reverse=not lower_is_better)
+        points = [(mn + (mx - mn) / 2, sc) for mn, mx, sc in enabled]
+        # Anchor at the outer edges of the first and last zones
+        best_edge = enabled[0][0] if lower_is_better else enabled[0][1]
+        worst_edge = enabled[-1][1] if lower_is_better else enabled[-1][0]
+        points = [(best_edge, 1.0)] + points + [(worst_edge, 0.05)]
+        if lower_is_better:
+            points.sort(key=lambda t: t[0])
+            if val <= points[0][0]:
+                return points[0][1]
+            if val >= points[-1][0]:
+                return points[-1][1]
+        else:
+            points.sort(key=lambda t: t[0], reverse=True)
+            if val >= points[0][0]:
+                return points[0][1]
+            if val <= points[-1][0]:
+                return points[-1][1]
+        for i in range(len(points) - 1):
+            v0, s0 = points[i]
+            v1, s1 = points[i + 1]
+            lo, hi = (v0, v1) if lower_is_better else (v1, v0)
+            if lo <= val <= hi:
+                t = (val - lo) / (hi - lo) if (hi - lo) != 0 else 0.5
+                return round(s0 + t * (s1 - s0), 3) if lower_is_better else round(s0 + (1 - t) * (s1 - s0), 3)
+        return None
+
+    def _radar_score(self, val: float, metric_key: str, lower_is_better: bool, threshold_config) -> float | None:
+        if threshold_config is None:
+            return None
+        if isinstance(threshold_config, list):
+            zones = next((e for e in threshold_config if metric_key in e.get('keys', [])), None)
+        else:
+            zones = threshold_config
+        if not zones:
+            return None
+        return self._score_against_zones(val, zones, lower_is_better)

@@ -10,7 +10,10 @@ st.set_page_config(layout='wide', page_title='PolyView LiDAR')
 
 _LOGO_CSS = (Path(__file__).parent / 'css' / 'logo.css').read_text()
 
+_LOGO_PATH = Path(__file__).parent / 'css' / 'polymath_robotics_logo.png'
+
 st.sidebar.markdown(f'<style>{_LOGO_CSS}</style>', unsafe_allow_html=True)
+st.sidebar.image(str(_LOGO_PATH), use_container_width=True)
 st.sidebar.markdown(
     '<span class="polyview-logo">PolyView</span>'
     '<span class="polyview-tagline">LiDAR Evaluation Suite</span>'
@@ -38,6 +41,8 @@ class PolyViewApp:
             st.session_state.visualization_data = {}
         if 'thresholds' not in st.session_state:
             st.session_state.thresholds = self._load_thresholds()
+        if 'lidar_thresholds' not in st.session_state:
+            st.session_state.lidar_thresholds = self._lidar_thresholds.copy()
         if 'show_settings' not in st.session_state:
             st.session_state.show_settings = False
 
@@ -127,7 +132,10 @@ class PolyViewApp:
 
     def render_comparison_graphs(self):
         st.markdown(self.visualization_handler.glow_css, unsafe_allow_html=True)
-        radar_fig = self.visualization_handler.render_overview_radar(st.session_state.metrics_data)
+        per_lidar_thresholds = {l: self._resolve_thresholds(l) for l in st.session_state.metrics_data}
+        per_lidar_metrics = {m for lc in st.session_state.get('lidar_thresholds', {}).values() for m in lc}
+        radar_exclude = {'NoiseRegionContamination', 'ZoneIntensityMean', 'IntensityUniformity'} | per_lidar_metrics
+        radar_fig = self.visualization_handler.render_overview_radar(st.session_state.metrics_data, per_lidar_thresholds, radar_exclude)
         st.plotly_chart(radar_fig, use_container_width=True, key='radar_chart')
         st.divider()
         detail_fig = self.visualization_handler.render_metrics_comparison(st.session_state.metrics_data)
@@ -135,7 +143,7 @@ class PolyViewApp:
 
     def _resolve_thresholds(self, lidar_name: str) -> dict:
         global_thresholds = st.session_state.get('thresholds', {})
-        per_lidar = self._lidar_thresholds.get(lidar_name, {})
+        per_lidar = st.session_state.get('lidar_thresholds', {}).get(lidar_name, {})
         if not per_lidar:
             return global_thresholds
         return {**global_thresholds, **per_lidar}
@@ -183,9 +191,13 @@ class PolyViewApp:
         st.markdown('Configure colored bands on metric graphs to visualize great / ok / bad regions.')
         thresholds = st.session_state.get('thresholds', {})
         thresholdable_metrics = self._settings.get('thresholdable_metrics', [])
+        per_lidar_metrics = {m for lc in st.session_state.get('lidar_thresholds', {}).values() for m in lc}
         with st.form('thresholds_form'):
             updated: dict = {}
             for metric in thresholdable_metrics:
+                if metric in per_lidar_metrics:
+                    updated[metric] = thresholds.get(metric, {})
+                    continue
                 st.markdown(f'### {metric}')
                 metric_config = thresholds.get(metric, {})
                 if isinstance(metric_config, list):
@@ -203,10 +215,10 @@ class PolyViewApp:
                         for zone in ('great', 'ok_1', 'ok_2', 'bad_1', 'bad_2'):
                             zone_data = entry.get(zone, {})
                             cols = st.columns([0.12, 0.55, 1, 1, 2])
-                            enabled = cols[0].checkbox('', value=bool(zone_data.get('enabled', False)), key=f'{metric}_{entry_idx}_{zone}_enabled')
+                            enabled = cols[0].checkbox('Enable', value=bool(zone_data.get('enabled', False)), key=f'{metric}_{entry_idx}_{zone}_enabled', label_visibility='collapsed')
                             cols[1].markdown(f'**{zone.replace("_", " ").capitalize()}**')
-                            min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{metric}_{entry_idx}_{zone}_min', label_visibility='collapsed')
-                            max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{metric}_{entry_idx}_{zone}_max', label_visibility='collapsed')
+                            min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{metric}_{entry_idx}_{zone}_min', label_visibility='collapsed', format='%g', step=0.001)
+                            max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{metric}_{entry_idx}_{zone}_max', label_visibility='collapsed', format='%g', step=0.001)
                             label = cols[4].text_input('label', value=str(zone_data.get('label', '')), key=f'{metric}_{entry_idx}_{zone}_label', label_visibility='collapsed')
                             updated_entry[zone] = {'enabled': enabled, 'min': min_val, 'max': max_val, 'label': label}
                         updated_list.append(updated_entry)
@@ -222,10 +234,10 @@ class PolyViewApp:
                     for zone in ('great', 'ok_1', 'ok_2', 'bad_1', 'bad_2'):
                         zone_data = metric_config.get(zone, {})
                         cols = st.columns([0.12, 0.55, 1, 1, 2])
-                        enabled = cols[0].checkbox('', value=bool(zone_data.get('enabled', False)), key=f'{metric}_{zone}_enabled')
+                        enabled = cols[0].checkbox('Enable', value=bool(zone_data.get('enabled', False)), key=f'{metric}_{zone}_enabled', label_visibility='collapsed')
                         cols[1].markdown(f'**{zone.replace("_", " ").capitalize()}**')
-                        min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{metric}_{zone}_min', label_visibility='collapsed')
-                        max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{metric}_{zone}_max', label_visibility='collapsed')
+                        min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{metric}_{zone}_min', label_visibility='collapsed', format='%g', step=0.001)
+                        max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{metric}_{zone}_max', label_visibility='collapsed', format='%g', step=0.001)
                         label = cols[4].text_input('label', value=str(zone_data.get('label', '')), key=f'{metric}_{zone}_label', label_visibility='collapsed')
                         updated[metric][zone] = {'enabled': enabled, 'min': min_val, 'max': max_val, 'label': label}
                 st.divider()
@@ -236,6 +248,47 @@ class PolyViewApp:
                 with open(settings_path, 'w') as f:
                     yaml.dump(self._settings, f)
                 st.success('Thresholds saved!')
+        st.divider()
+        st.subheader('Per-LiDAR Overrides')
+        st.markdown('_Metric-specific overrides per lidar — take precedence over global thresholds above._')
+        self.render_per_lidar_settings()
+
+    def render_per_lidar_settings(self):
+        lidar_thresholds = st.session_state.get('lidar_thresholds', {})
+        if not lidar_thresholds:
+            st.info('No per-lidar overrides defined in lidar_thresholds.yaml.')
+            return
+        tabs = st.tabs(list(lidar_thresholds.keys()))
+        for tab, lidar_name in zip(tabs, lidar_thresholds.keys()):
+            with tab:
+                lidar_config = lidar_thresholds[lidar_name]
+                with st.form(f'lidar_form_{lidar_name}'):
+                    updated: dict = {}
+                    for metric, metric_config in lidar_config.items():
+                        st.markdown(f'### {metric}')
+                        updated[metric] = {}
+                        header = st.columns([0.12, 0.55, 1, 1, 2])
+                        header[0].markdown('**On**')
+                        header[1].markdown('**Zone**')
+                        header[2].markdown('**Min**')
+                        header[3].markdown('**Max**')
+                        header[4].markdown('**Label**')
+                        for zone in ('great', 'ok_1', 'ok_2', 'bad_1', 'bad_2'):
+                            zone_data = metric_config.get(zone, {})
+                            cols = st.columns([0.12, 0.55, 1, 1, 2])
+                            enabled = cols[0].checkbox('Enable', value=bool(zone_data.get('enabled', False)), key=f'{lidar_name}_{metric}_{zone}_enabled', label_visibility='collapsed')
+                            cols[1].markdown(f'**{zone.replace("_", " ").capitalize()}**')
+                            min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{lidar_name}_{metric}_{zone}_min', label_visibility='collapsed', format='%g', step=0.001)
+                            max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{lidar_name}_{metric}_{zone}_max', label_visibility='collapsed', format='%g', step=0.001)
+                            label = cols[4].text_input('label', value=str(zone_data.get('label', '')), key=f'{lidar_name}_{metric}_{zone}_label', label_visibility='collapsed')
+                            updated[metric][zone] = {'enabled': enabled, 'min': min_val, 'max': max_val, 'label': label}
+                        st.divider()
+                    if st.form_submit_button(f'💾 Save {lidar_name}', use_container_width=True):
+                        st.session_state.lidar_thresholds[lidar_name] = updated
+                        lidar_thresholds_path = Path(__file__).parent / 'lidar_thresholds.yaml'
+                        with open(lidar_thresholds_path, 'w') as f:
+                            yaml.dump(st.session_state.lidar_thresholds, f, allow_unicode=True)
+                        st.success(f'{lidar_name} thresholds saved!')
 
     def render_3d_button_panel(self):
         all_layers = ['PointCloud', 'Expected Planes', 'Fitted PCA Plane', "Spatial Dropout Analysis"]

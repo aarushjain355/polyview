@@ -25,7 +25,6 @@ thresholdable_metrics:
 - TemporalConsistency
 - ZoneSurfaceDepthError
 - SurfaceFitResidual
-- RangePrecision
 - "SurfaceFitResidual \xB7 offset"
 - SpatialDropout
 - PointYieldPerZone
@@ -34,7 +33,7 @@ thresholds:
     bad_1:
       enabled: true
       label: Noisy
-      max: 0.1
+      max: 0.9
       min: 0.008
     bad_2:
       enabled: false
@@ -141,10 +140,10 @@ thresholds:
     bad_1:
       enabled: true
       label: Poor
-      max: 1.0
+      max: 3.04
       min: 0.05
     bad_2:
-      enabled: true
+      enabled: false
       label: ''
       max: 0.0
       min: 0.0
@@ -159,7 +158,7 @@ thresholds:
       max: 0.05
       min: 0.01
     ok_2:
-      enabled: true
+      enabled: false
       label: ''
       max: 0.0
       min: 0.0

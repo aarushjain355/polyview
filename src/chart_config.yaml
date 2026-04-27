@@ -1,11 +1,11 @@
 count_bar_color: 'rgba(150,120,255,0.85)'
 
 zone_fill_colors:
-  great: 'rgba(57,255,20,0.22)'
-  ok_1:  'rgba(255,220,0,0.25)'
-  ok_2:  'rgba(255,100,0,0.25)'
-  bad_1: 'rgba(255,50,50,0.25)'
-  bad_2: 'rgba(160,0,200,0.25)'
+  great: 'rgba(57,255,20,0.28)'
+  ok_1:  'rgba(255,220,0,0.30)'
+  ok_2:  'rgba(255,100,0,0.30)'
+  bad_1: 'rgba(255,50,50,0.30)'
+  bad_2: 'rgba(160,0,200,0.30)'
 
 zone_legend_colors:
   great: 'rgba(57,255,20,0.9)'
@@ -16,9 +16,9 @@ zone_legend_colors:
 
 palette:
   - '#00BFFF'
-  - '#00BFFF'
   - '#FF6B6B'
   - '#FFD700'
+  - '#39FF14'
   - '#DA70D6'
   - '#FF8C00'
   - '#00FA9A'
@@ -50,7 +50,7 @@ layout:
   title_font_size: 26
   legend_title: 'LiDAR'
   legend_font_size: 13
-  subplot_vertical_spacing: 0.06
+  subplot_vertical_spacing: 0.04
   subplot_height_per_row: 550
   subplot_title_font_size: 16
   bar_opacity: 0.85
