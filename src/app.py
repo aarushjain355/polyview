@@ -827,115 +827,92 @@ class PolyViewApp:
         return {**defaults, **user_overrides}
 
     def _load_abstract_thresholds(self) -> dict:
+        """Abstract thresholds from defaults.yaml, with any per-category overrides
+        saved in settings.yaml taking precedence (the Settings page writes there,
+        so defaults.yaml stays the documented baseline)."""
         defaults_path = Path(__file__).parent / 'defaults.yaml'
+        base = {}
         if defaults_path.exists():
             with open(defaults_path, 'r') as f:
-                return (yaml.safe_load(f) or {}).get('abstract_thresholds', {})
-        return {}
+                base = (yaml.safe_load(f) or {}).get('abstract_thresholds', {})
+        override = self._settings.get('abstract_thresholds', {}) or {}
+        return {**base, **override}
+
+    def _save_abstract_thresholds(self, updated: dict) -> None:
+        self._settings['abstract_thresholds'] = updated
+        settings_path = Path(__file__).parent / 'settings.yaml'
+        with open(settings_path, 'w') as f:
+            yaml.dump(self._settings, f, allow_unicode=True)
 
     def render_settings_page(self):
         st.title('⚙️ Metric Thresholds')
-        st.markdown('Configure colored bands on metric graphs to visualize great / ok / bad regions.')
-        thresholds = st.session_state.get('thresholds', {})
-        thresholdable_metrics = self._settings.get('thresholdable_metrics', [])
-        per_lidar_metrics = {m for lc in st.session_state.get('lidar_thresholds', {}).values() for m in lc}
-        with st.form('thresholds_form'):
-            updated: dict = {}
-            for metric in thresholdable_metrics:
-                if metric in per_lidar_metrics:
-                    updated[metric] = thresholds.get(metric, {})
-                    continue
-                st.markdown(f'### {metric}')
-                metric_config = thresholds.get(metric, {})
-                if isinstance(metric_config, list):
-                    updated_list = []
-                    for entry_idx, entry in enumerate(metric_config):
-                        keys_label = ', '.join(entry.get('keys', []))
-                        st.markdown(f'**`{keys_label}`**')
-                        updated_entry: dict = {'keys': entry.get('keys', [])}
-                        header = st.columns([0.12, 0.55, 1, 1, 2])
-                        header[0].markdown('**On**')
-                        header[1].markdown('**Zone**')
-                        header[2].markdown('**Min**')
-                        header[3].markdown('**Max**')
-                        header[4].markdown('**Label**')
-                        for zone in ('great', 'ok_1', 'ok_2', 'bad_1', 'bad_2'):
-                            zone_data = entry.get(zone, {})
-                            cols = st.columns([0.12, 0.55, 1, 1, 2])
-                            enabled = cols[0].checkbox('Enable', value=bool(zone_data.get('enabled', False)), key=f'{metric}_{entry_idx}_{zone}_enabled', label_visibility='collapsed')
-                            cols[1].markdown(f'**{zone.replace("_", " ").capitalize()}**')
-                            min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{metric}_{entry_idx}_{zone}_min', label_visibility='collapsed', format='%g', step=0.001)
-                            max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{metric}_{entry_idx}_{zone}_max', label_visibility='collapsed', format='%g', step=0.001)
-                            label = cols[4].text_input('label', value=str(zone_data.get('label', '')), key=f'{metric}_{entry_idx}_{zone}_label', label_visibility='collapsed')
-                            updated_entry[zone] = {'enabled': enabled, 'min': min_val, 'max': max_val, 'label': label}
-                        updated_list.append(updated_entry)
-                    updated[metric] = updated_list
-                else:
-                    updated[metric] = {}
-                    header = st.columns([0.12, 0.55, 1, 1, 2])
-                    header[0].markdown('**On**')
-                    header[1].markdown('**Zone**')
-                    header[2].markdown('**Min**')
-                    header[3].markdown('**Max**')
-                    header[4].markdown('**Label**')
-                    for zone in ('great', 'ok_1', 'ok_2', 'bad_1', 'bad_2'):
-                        zone_data = metric_config.get(zone, {})
-                        cols = st.columns([0.12, 0.55, 1, 1, 2])
-                        enabled = cols[0].checkbox('Enable', value=bool(zone_data.get('enabled', False)), key=f'{metric}_{zone}_enabled', label_visibility='collapsed')
-                        cols[1].markdown(f'**{zone.replace("_", " ").capitalize()}**')
-                        min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{metric}_{zone}_min', label_visibility='collapsed', format='%g', step=0.001)
-                        max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{metric}_{zone}_max', label_visibility='collapsed', format='%g', step=0.001)
-                        label = cols[4].text_input('label', value=str(zone_data.get('label', '')), key=f'{metric}_{zone}_label', label_visibility='collapsed')
-                        updated[metric][zone] = {'enabled': enabled, 'min': min_val, 'max': max_val, 'label': label}
-                st.divider()
-            if st.form_submit_button('💾 Save Thresholds', use_container_width=True):
-                st.session_state.thresholds = updated
-                self._settings['thresholds'] = updated
-                settings_path = Path(__file__).parent / 'settings.yaml'
-                with open(settings_path, 'w') as f:
-                    yaml.dump(self._settings, f)
-                st.success('Thresholds saved!')
-        st.divider()
-        st.subheader('Per-LiDAR Overrides')
-        st.markdown('_Metric-specific overrides per lidar — take precedence over global thresholds above._')
-        self.render_per_lidar_settings()
-
-    def render_per_lidar_settings(self):
-        lidar_thresholds = st.session_state.get('lidar_thresholds', {})
-        if not lidar_thresholds:
-            st.info('No per-lidar overrides defined in lidar_thresholds.yaml.')
+        st.markdown(
+            'Configure the **great / ok / bad** bands used for the metric bullets and radar scoring. '
+            'Each metric uses a single great, ok, and bad band; values are in the metric\'s native '
+            'units (% , meters, or fraction). Saved to `settings.yaml`.'
+        )
+        abstract_thresholds = st.session_state.abstract_thresholds
+        if not abstract_thresholds:
+            st.info('No metric thresholds defined in defaults.yaml.')
             return
-        tabs = st.tabs(list(lidar_thresholds.keys()))
-        for tab, lidar_name in zip(tabs, lidar_thresholds.keys()):
-            with tab:
-                lidar_config = lidar_thresholds[lidar_name]
-                with st.form(f'lidar_form_{lidar_name}'):
-                    updated: dict = {}
-                    for metric, metric_config in lidar_config.items():
-                        st.markdown(f'### {metric}')
-                        updated[metric] = {}
-                        header = st.columns([0.12, 0.55, 1, 1, 2])
-                        header[0].markdown('**On**')
-                        header[1].markdown('**Zone**')
-                        header[2].markdown('**Min**')
-                        header[3].markdown('**Max**')
-                        header[4].markdown('**Label**')
-                        for zone in ('great', 'ok_1', 'ok_2', 'bad_1', 'bad_2'):
-                            zone_data = metric_config.get(zone, {})
-                            cols = st.columns([0.12, 0.55, 1, 1, 2])
-                            enabled = cols[0].checkbox('Enable', value=bool(zone_data.get('enabled', False)), key=f'{lidar_name}_{metric}_{zone}_enabled', label_visibility='collapsed')
-                            cols[1].markdown(f'**{zone.replace("_", " ").capitalize()}**')
-                            min_val = cols[2].number_input('min', value=float(zone_data.get('min', 0.0)), key=f'{lidar_name}_{metric}_{zone}_min', label_visibility='collapsed', format='%g', step=0.001)
-                            max_val = cols[3].number_input('max', value=float(zone_data.get('max', 0.0)), key=f'{lidar_name}_{metric}_{zone}_max', label_visibility='collapsed', format='%g', step=0.001)
-                            label = cols[4].text_input('label', value=str(zone_data.get('label', '')), key=f'{lidar_name}_{metric}_{zone}_label', label_visibility='collapsed')
-                            updated[metric][zone] = {'enabled': enabled, 'min': min_val, 'max': max_val, 'label': label}
-                        st.divider()
-                    if st.form_submit_button(f'💾 Save {lidar_name}', use_container_width=True):
-                        st.session_state.lidar_thresholds[lidar_name] = updated
-                        lidar_thresholds_path = Path(__file__).parent / 'lidar_thresholds.yaml'
-                        with open(lidar_thresholds_path, 'w') as f:
-                            yaml.dump(st.session_state.lidar_thresholds, f, allow_unicode=True)
-                        st.success(f'{lidar_name} thresholds saved!')
+
+        band_names = ('great', 'ok', 'bad')
+        # Friendly per-metric labels from the schema (e.g. "Mean Depth Error (%) · pooled").
+        spec_labels = {(s['category'], s['suffix']): s['label'] for s in self._abstract_specs()}
+
+        def _spaced(name: str) -> str:
+            # Split CamelCase category names into words: ZoneSurfaceDepthError -> Zone Surface Depth Error
+            return ''.join(f' {c}' if c.isupper() and i else c for i, c in enumerate(name)).strip()
+
+        with st.form('abstract_thresholds_form'):
+            updated: dict = {}
+            for category, cat_config in abstract_thresholds.items():
+                # Plain sans-serif heading — avoids the global h3 style (uppercase,
+                # letter-spaced monospace) that makes the names hard to read.
+                st.markdown(
+                    f'<div style="font-family:sans-serif !important; font-size:21px; '
+                    f'font-weight:700; color:#FFFFFF; letter-spacing:normal; '
+                    f'text-transform:none; margin:20px 0 6px;">{_spaced(category)}</div>',
+                    unsafe_allow_html=True,
+                )
+                lower_is_better = st.checkbox(
+                    'Lower is better',
+                    value=bool(cat_config.get('lower_is_better', True)),
+                    key=f'ab_{category}_lib',
+                    help='When on, smaller values score as "great". Turn off for metrics where higher is better.',
+                )
+                header = st.columns([2, 1, 1, 1, 1, 1, 1])
+                for col, txt in zip(header, ['Metric', 'Great min', 'Great max', 'OK min', 'OK max', 'Bad min', 'Bad max']):
+                    col.markdown(f'**{txt}**')
+
+                updated_keys: dict = {}
+                for suffix, bands in cat_config.get('keys', {}).items():
+                    label = spec_labels.get((category, suffix)) or suffix.lstrip('_').replace('_', ' ').title()
+                    cols = st.columns([2, 1, 1, 1, 1, 1, 1])
+                    cols[0].markdown(
+                        f'<div style="font-family:sans-serif !important; font-size:14px; '
+                        f'color:rgba(255,255,255,0.9); text-transform:none; letter-spacing:normal; '
+                        f'padding-top:6px;">{label}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    new_bands: dict = {}
+                    for i, band in enumerate(band_names):
+                        b = bands.get(band, {})
+                        bmin = cols[1 + i * 2].number_input(
+                            f'{band} min', value=float(b.get('min', 0.0)), step=0.001, format='%g',
+                            label_visibility='collapsed', key=f'ab_{category}_{suffix}_{band}_min')
+                        bmax = cols[2 + i * 2].number_input(
+                            f'{band} max', value=float(b.get('max', 0.0)), step=0.001, format='%g',
+                            label_visibility='collapsed', key=f'ab_{category}_{suffix}_{band}_max')
+                        new_bands[band] = {'min': bmin, 'max': bmax}
+                    updated_keys[suffix] = new_bands
+                updated[category] = {**cat_config, 'lower_is_better': lower_is_better, 'keys': updated_keys}
+                st.divider()
+
+            if st.form_submit_button('💾 Save Thresholds', use_container_width=True):
+                st.session_state.abstract_thresholds = updated
+                self._save_abstract_thresholds(updated)
+                st.success('Thresholds saved!')
 
     def render_3d_button_panel(self):
         all_layers = ['PointCloud', 'Expected Planes', 'Cropped Expected', 'Fitted PCA Plane', 'Spatial Dropout Analysis', 'Worst Points']
