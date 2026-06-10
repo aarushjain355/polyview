@@ -9,6 +9,11 @@ import time
 
 st.set_page_config(layout='wide', page_title='PolyView LiDAR')
 
+# Comparison-view only: Case 1 red, Case 2 teal. Shared by the case header chips
+# and the comparison chart series so the legends match the headings. Other views
+# keep the default palette.
+CASE_COLORS = ('#FF4B4B', '#2EC4B6')
+
 _LOGO_CSS = (Path(__file__).parent / 'css' / 'logo.css').read_text()
 
 _LOGO_PATH = Path(__file__).parent / 'css' / 'polymath_robotics_logo.png'
@@ -106,6 +111,22 @@ class PolyViewApp:
         bands = {t: {'min': raw_bands[t]['min'] * scale, 'max': raw_bands[t]['max'] * scale}
                  for t in ('great', 'ok', 'bad') if t in raw_bands}
         return bands if all(t in bands for t in ('great', 'ok', 'bad')) else None
+
+    def _zone_keys(self, case_datas: list, specs: list) -> list:
+        """Ordered, de-duplicated raw zone keys (e.g. 'green_wall') found across
+        the given case data dicts. Title-cased for display elsewhere via
+        zone.replace('_', ' ').title(), which matches `_metric_rows` /
+        `_metric_percentiles` zone labels and `_score_case_by_zone` keys."""
+        zones = []
+        for cd in case_datas:
+            for spec in specs:
+                suffix = spec['suffix']
+                for key, val in cd.get(spec['category'], {}).items():
+                    if key.endswith(suffix) and isinstance(val, (int, float)):
+                        zone = key[: -len(suffix)].rstrip('_')
+                        if zone and zone not in zones:
+                            zones.append(zone)
+        return zones
 
     @staticmethod
     def _metric_rows(cat_data: dict, spec: dict) -> list:
@@ -257,52 +278,62 @@ class PolyViewApp:
             c1.metric('Horizontal FOV', f'{h:.1f}°' if isinstance(h, (int, float)) else '—')
             c2.metric('Vertical FOV', f'{v:.1f}°' if isinstance(v, (int, float)) else '—')
 
-        current_group = None
-        for spec in self._abstract_specs():
-            if spec['group'] != current_group:
+        specs = self._abstract_specs()
+        zones = self._zone_keys([base_data], specs)
+        if not zones:
+            st.info('No metrics available for this LiDAR.')
+            return
+
+        # One tab per zone; each tab shows that zone's metrics across all groups.
+        for zone, ztab in zip(zones, st.tabs([z.replace('_', ' ').title() for z in zones])):
+            zone_title = zone.replace('_', ' ').title()
+            with ztab:
+                current_group = None
+                for spec in specs:
+                    cat_data = base_data.get(spec['category'], {})
+                    rows = [(zl, v) for zl, v in self._metric_rows(cat_data, spec) if zl == zone_title]
+                    if not rows:
+                        continue
+                    if spec['group'] != current_group:
+                        if current_group is not None:
+                            st.divider()
+                        current_group = spec['group']
+                        st.markdown(
+                            f'<div style="font-size:24px; font-weight:800; color:#FFFFFF; '
+                            f'letter-spacing:0.06em; text-transform:uppercase; '
+                            f'margin:22px 0 10px; padding:10px 18px; '
+                            f'border-left:5px solid #5138EE; border-radius:6px; '
+                            f'background:linear-gradient(90deg, rgba(81,56,238,0.32), rgba(81,56,238,0.0));">'
+                            f'{current_group.replace("_", " ")}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    bands = self._scaled_bands(spec['raw_bands'], spec['is_frac'])
+                    if spec['description']:
+                        st.markdown(
+                            f'<div style="font-size:15px; color:rgba(255,255,255,0.82); '
+                            f'line-height:1.55; margin:30px 0 16px;">{spec["description"]}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    fig = self.visualization_handler.make_bullet_figure(
+                        title=spec['label'], rows=rows, bands=bands,
+                        lower_is_better=spec['lower_is_better'], value_suffix=spec['value_suffix'],
+                    )
+                    st.plotly_chart(fig, width='stretch', key=f"bullet_{lidar_name}_{zone}_{spec['category']}_{spec['suffix']}")
+
+                    # Explore-more: percentile distribution (metrics with a p50/p90/p99 family).
+                    series = {zl: pd for zl, pd in self._metric_percentiles(cat_data, spec).items() if zl == zone_title}
+                    if series:
+                        tkey = f"dist_{lidar_name}_{zone}_{spec['category']}_{spec['suffix']}"
+                        _, col_btn = st.columns([5, 2])
+                        with col_btn:
+                            if st.button('📊 Explore distribution', key=f'btn_{tkey}', use_container_width=True):
+                                st.session_state[tkey] = not st.session_state.get(tkey, False)
+                        if st.session_state.get(tkey, False):
+                            dist_fig = self.visualization_handler.make_percentile_distribution(
+                                spec['label'], series, spec['value_suffix'])
+                            st.plotly_chart(dist_fig, width='stretch', key=f'chart_{tkey}')
                 if current_group is not None:
                     st.divider()
-                current_group = spec['group']
-                st.markdown(
-                    f'<div style="font-size:24px; font-weight:800; color:#FFFFFF; '
-                    f'letter-spacing:0.06em; text-transform:uppercase; '
-                    f'margin:22px 0 10px; padding:10px 18px; '
-                    f'border-left:5px solid #5138EE; border-radius:6px; '
-                    f'background:linear-gradient(90deg, rgba(81,56,238,0.32), rgba(81,56,238,0.0));">'
-                    f'{current_group.replace("_", " ")}</div>',
-                    unsafe_allow_html=True,
-                )
-            cat_data = base_data.get(spec['category'], {})
-            rows = self._metric_rows(cat_data, spec)
-            if not rows:
-                continue
-            bands = self._scaled_bands(spec['raw_bands'], spec['is_frac'])
-            if spec['description']:
-                st.markdown(
-                    f'<div style="font-size:15px; color:rgba(255,255,255,0.82); '
-                    f'line-height:1.55; margin:30px 0 16px;">{spec["description"]}</div>',
-                    unsafe_allow_html=True,
-                )
-            fig = self.visualization_handler.make_bullet_figure(
-                title=spec['label'], rows=rows, bands=bands,
-                lower_is_better=spec['lower_is_better'], value_suffix=spec['value_suffix'],
-            )
-            st.plotly_chart(fig, width='stretch', key=f"bullet_{lidar_name}_{spec['category']}_{spec['suffix']}")
-
-            # Explore-more: percentile distribution (metrics with a p50/p90/p99 family).
-            series = self._metric_percentiles(cat_data, spec)
-            if series:
-                tkey = f"dist_{lidar_name}_{spec['category']}_{spec['suffix']}"
-                _, col_btn = st.columns([5, 2])
-                with col_btn:
-                    if st.button('📊 Explore distribution', key=f'btn_{tkey}', use_container_width=True):
-                        st.session_state[tkey] = not st.session_state.get(tkey, False)
-                if st.session_state.get(tkey, False):
-                    dist_fig = self.visualization_handler.make_percentile_distribution(
-                        spec['label'], series, spec['value_suffix'])
-                    st.plotly_chart(dist_fig, width='stretch', key=f'chart_{tkey}')
-        if current_group is not None:
-            st.divider()
 
     def render_explore_further_button(self, lidar_name: str = ''):
         if 'explore_lidar' not in st.session_state:
@@ -625,9 +656,8 @@ class PolyViewApp:
         case_a_path = st.session_state.get('explore_case_path', 'base') or 'base'
         case_a_label = f'{case_a_lidar} · {case_a_path.replace("/", " · ").title()}'
 
-        st.markdown(f'**Case A (current):** `{case_a_label}`')
-        st.markdown('---')
-        st.markdown('**Compare against:**')
+        st.markdown(f'**Case 1:** `{case_a_label}`')
+        st.markdown('**Case 2:**')
 
         lidar_b = st.selectbox('LiDAR', options=all_lidars, key='cmp_b_lidar')
         self._render_case_selector(self._env_data.get(lidar_b, {}), state_prefix='cmp_b')
@@ -639,8 +669,26 @@ class PolyViewApp:
             st.info('Select a valid case to compare.')
             return
 
-        tag_a, tag_b = 'A', 'B'
-        st.markdown(f'**{tag_a}** = `{case_a_label}`  ·  **{tag_b}** = `{case_b_label}`')
+        tag_a, tag_b = 'Case 1', 'Case 2'
+
+        def _case_chip(tag, label, accent):
+            return (
+                f'<div style="flex:1; min-width:240px; padding:14px 20px; border-radius:10px; '
+                f'border-left:6px solid {accent}; '
+                f'background:linear-gradient(90deg, {accent}33, {accent}0d);">'
+                f'<div style="font-size:13px; font-weight:700; letter-spacing:0.12em; '
+                f'text-transform:uppercase; color:{accent}; margin-bottom:4px;">{tag}</div>'
+                f'<div style="font-size:22px; font-weight:800; color:#FFFFFF;">{label}</div>'
+                f'</div>'
+            )
+
+        st.markdown(
+            f'<div style="display:flex; gap:16px; flex-wrap:wrap; margin:16px 0 8px;">'
+            f'{_case_chip(tag_a, case_a_label, CASE_COLORS[0])}'
+            f'{_case_chip(tag_b, case_b_label, CASE_COLORS[1])}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
         specs = self._abstract_specs()
 
@@ -654,62 +702,86 @@ class PolyViewApp:
                 unsafe_allow_html=True,
             )
 
-        # ---- Radars first: category triangle + detailed radar, both cases -------
-        _group_heading('Radars')
         score_a = self._score_case_by_zone(case_a_data, specs)
         score_b = self._score_case_by_zone(case_b_data, specs)
-        for zone in dict.fromkeys(list(score_a) + list(score_b)):
-            detail, cat = {}, {}
-            if zone in score_a:
-                detail[case_a_label] = score_a[zone]['detail']
-                cat[case_a_label] = score_a[zone]['category']
-            if zone in score_b:
-                detail[case_b_label] = score_b[zone]['detail']
-                cat[case_b_label] = score_b[zone]['category']
-            if cat:
-                tri = self.visualization_handler.make_abstract_radar_figure(f'{zone} · Category Scores', cat)
-                st.plotly_chart(tri, use_container_width=True, key=f'cmp_category_radar_{zone}')
-            if detail:
-                rad = self.visualization_handler.make_abstract_radar_figure(zone, detail)
-                st.plotly_chart(rad, use_container_width=True, key=f'cmp_abstract_radar_{zone}')
+        zones = self._zone_keys([case_a_data, case_b_data], specs)
+        if not zones:
+            st.info('No metrics available to compare.')
+            return
 
-        # ---- Section 1: abstract metric bars, both cases stacked per zone --------
-        st.divider()
-        current_group = None
-        for spec in specs:
-            if spec['group'] != current_group:
-                current_group = spec['group']
-                _group_heading(current_group.replace('_', ' '))
-            ra = dict(self._metric_rows(case_a_data.get(spec['category'], {}), spec))
-            rb = dict(self._metric_rows(case_b_data.get(spec['category'], {}), spec))
-            if not ra and not rb:
-                continue
-            rows = []
-            for zl in dict.fromkeys(list(ra) + list(rb)):  # zone union, A then B per zone
-                if zl in ra:
-                    rows.append((f'{tag_a} · {zl}', ra[zl]))
-                if zl in rb:
-                    rows.append((f'{tag_b} · {zl}', rb[zl]))
-            fig = self.visualization_handler.make_bullet_figure(
-                title=spec['label'], rows=rows,
-                bands=self._scaled_bands(spec['raw_bands'], spec['is_frac']),
-                lower_is_better=spec['lower_is_better'], value_suffix=spec['value_suffix'],
-            )
-            st.plotly_chart(fig, width='stretch', key=f"cmp_bullet_{spec['category']}_{spec['suffix']}")
+        # Zone is the tab, so rows are labeled by LiDAR (bold + accent color so the
+        # two rows stay distinguishable) followed by the dimmer case name, one line.
+        # make_bullet_figure sizes its left margin to the longest label.
+        def _row_label(lidar, case_part, accent):
+            return (f'<span style="font-size:15px;font-weight:800;color:{accent};">{lidar}</span>'
+                    f'<span style="font-size:13px;color:rgba(255,255,255,0.7);"> · {case_part}</span>')
 
-        # ---- Section 2: percentile box plots (both cases overlaid) ---------------
-        st.divider()
-        _group_heading('Distributions')
-        for spec in specs:
-            sa = self._metric_percentiles(case_a_data.get(spec['category'], {}), spec)
-            sb = self._metric_percentiles(case_b_data.get(spec['category'], {}), spec)
-            if not sa and not sb:
-                continue
-            series = {f'{tag_a} · {zl}': pd for zl, pd in sa.items()}
-            series.update({f'{tag_b} · {zl}': pd for zl, pd in sb.items()})
-            dist_fig = self.visualization_handler.make_percentile_distribution(
-                spec['label'], series, spec['value_suffix'])
-            st.plotly_chart(dist_fig, width='stretch', key=f"cmp_dist_{spec['category']}_{spec['suffix']}")
+        case_a_part = case_a_path.replace('/', ' · ').title()
+        case_b_part = case_b_path.replace('/', ' · ').title()
+
+        # One tab per zone; each tab shows that zone's radars, bullets, distributions.
+        for zone, ztab in zip(zones, st.tabs([z.replace('_', ' ').title() for z in zones])):
+            zone_title = zone.replace('_', ' ').title()
+            with ztab:
+                # ---- Radars: category triangle + detailed radar, both cases ------
+                _group_heading('Radars')
+                detail, cat, radar_colors = {}, {}, []
+                if zone in score_a:
+                    detail[case_a_label] = score_a[zone]['detail']
+                    cat[case_a_label] = score_a[zone]['category']
+                    radar_colors.append(CASE_COLORS[0])
+                if zone in score_b:
+                    detail[case_b_label] = score_b[zone]['detail']
+                    cat[case_b_label] = score_b[zone]['category']
+                    radar_colors.append(CASE_COLORS[1])
+                if cat:
+                    tri = self.visualization_handler.make_abstract_radar_figure(f'{zone_title} · Category Scores', cat, radar_colors)
+                    st.plotly_chart(tri, use_container_width=True, key=f'cmp_category_radar_{zone}')
+                if detail:
+                    rad = self.visualization_handler.make_abstract_radar_figure(zone_title, detail, radar_colors)
+                    st.plotly_chart(rad, use_container_width=True, key=f'cmp_abstract_radar_{zone}')
+
+                # ---- Abstract metric bars, both cases for this zone -------------
+                st.divider()
+                current_group = None
+                for spec in specs:
+                    ra = dict(self._metric_rows(case_a_data.get(spec['category'], {}), spec))
+                    rb = dict(self._metric_rows(case_b_data.get(spec['category'], {}), spec))
+                    va, vb = ra.get(zone_title), rb.get(zone_title)
+                    if va is None and vb is None:
+                        continue
+                    if spec['group'] != current_group:
+                        current_group = spec['group']
+                        _group_heading(current_group.replace('_', ' '))
+                    rows = []
+                    if va is not None:
+                        rows.append((_row_label(case_a_lidar, case_a_part, CASE_COLORS[0]), va))
+                    if vb is not None:
+                        rows.append((_row_label(lidar_b, case_b_part, CASE_COLORS[1]), vb))
+                    fig = self.visualization_handler.make_bullet_figure(
+                        title=spec['label'], rows=rows,
+                        bands=self._scaled_bands(spec['raw_bands'], spec['is_frac']),
+                        lower_is_better=spec['lower_is_better'], value_suffix=spec['value_suffix'],
+                    )
+                    st.plotly_chart(fig, width='stretch', key=f"cmp_bullet_{zone}_{spec['category']}_{spec['suffix']}")
+
+                # ---- Percentile box plots (both cases overlaid) ----------------
+                st.divider()
+                _group_heading('Distributions')
+                for spec in specs:
+                    sa = self._metric_percentiles(case_a_data.get(spec['category'], {}), spec)
+                    sb = self._metric_percentiles(case_b_data.get(spec['category'], {}), spec)
+                    pa, pb = sa.get(zone_title), sb.get(zone_title)
+                    if pa is None and pb is None:
+                        continue
+                    series = {}
+                    if pa is not None:
+                        series[f'{tag_a} · {case_a_label}'] = pa
+                    if pb is not None:
+                        series[f'{tag_b} · {case_b_label}'] = pb
+                    dist_fig = self.visualization_handler.make_percentile_distribution(
+                        spec['label'], series, spec['value_suffix'])
+                    st.plotly_chart(dist_fig, width='stretch', key=f"cmp_dist_{zone}_{spec['category']}_{spec['suffix']}")
 
     def _resolve_thresholds(self, lidar_name: str) -> dict:
         global_thresholds = st.session_state.get('thresholds', {})

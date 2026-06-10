@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -682,12 +683,13 @@ class VisualizationHandler:
 
         return fig
 
-    def make_abstract_radar_figure(self, zone_name: str, lidar_scores: dict) -> go.Figure:
+    def make_abstract_radar_figure(self, zone_name: str, lidar_scores: dict, colors: list | None = None) -> go.Figure:
         if not lidar_scores:
             return go.Figure()
         layout = self._config['layout']
         lidar_names = list(lidar_scores.keys())
-        colors = self._colors(len(lidar_names))
+        if colors is None:
+            colors = self._colors(len(lidar_names))
         all_labels = list(dict.fromkeys(label for scores in lidar_scores.values() for label in scores))
         if not all_labels:
             return go.Figure()
@@ -1203,6 +1205,11 @@ class VisualizationHandler:
         zones = [name for name, _ in rows]
         values = [val for _, val in rows]
 
+        # Size the left margin to the longest row label (visible text, HTML stripped)
+        # so labels stay on one line however long the LiDAR/case name is.
+        max_label_chars = max((len(re.sub(r'<[^>]+>', '', name)) for name in zones), default=10)
+        left_margin = int(min(440, max(130, max_label_chars * 7.5)))
+
         fig = go.Figure()
 
         # Threshold bands — the colored "track". Lower opacity so the value needle
@@ -1263,7 +1270,7 @@ class VisualizationHandler:
             paper_bgcolor='#0e1117',
             plot_bgcolor='#0e1117',
             height=80 + 88 * len(zones),
-            margin=dict(l=130, r=140, t=46, b=34),
+            margin=dict(l=left_margin, r=140, t=46, b=34),
             xaxis=dict(
                 range=[x_lo, x_hi],
                 color='rgba(255,255,255,0.6)',
