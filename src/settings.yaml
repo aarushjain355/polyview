@@ -1,31 +1,42 @@
 plot_y_padding: 0.3
 secondary_axis_keys:
 - rough_n
-- green_wall_point_count
-- whiteboard_point_count
-- green_wall_dropout_cell_count
-- whiteboard_dropout_cell_count
-- green_wall_total_cell_count
-- whiteboard_total_cell_count
-- range_std
+- point_count
+- dropout_cell_count
+- total_cell_count
+category_skip_key_suffixes:
+  ZoneSurfaceDepthError:
+    - _pct
+  NearestNeighbourSpacing:
+    - nn_outlier_frac
+
 split_by_suffix_categories:
 - TemporalConsistency
 - SurfaceFitResidual
 - RangePrecision
+- RangeDistributionHealth
 split_exclude_suffixes:
   RangePrecision:
   - mean
   TemporalConsistency:
   - mean
+  RangeDistributionHealth:
+  - min
+  - max
+  - p10
+  - p50
+  - p90
+  - p99
+  - mean
+  - expected
 thresholdable_metrics:
-- RangeDistributionHealth
+- "RangeDistributionHealth \xB7 std"
 - LocalRoughnessKNN
 - NearestNeighbourSpacing
 - RangePrecision
 - TemporalConsistency
 - ZoneSurfaceDepthError
-- SurfaceFitResidual
-- RangePrecision
+- "SurfaceFitResidual \xB7 rms"
 - "SurfaceFitResidual \xB7 offset"
 - SpatialDropout
 - PointYieldPerZone
@@ -34,7 +45,7 @@ thresholds:
     bad_1:
       enabled: true
       label: Noisy
-      max: 0.1
+      max: 0.9
       min: 0.008
     bad_2:
       enabled: false
@@ -127,6 +138,7 @@ thresholds:
       min: 0.2
     keys:
     - green_wall_yield_frac
+    - blue_suitcase_yield_frac
     ok_1:
       enabled: true
       label: Partially low
@@ -137,29 +149,29 @@ thresholds:
       label: Partially high
       max: 0.5
       min: 0.3
-  RangeDistributionHealth:
+  "RangeDistributionHealth \xB7 std":
     bad_1:
       enabled: true
-      label: Poor
-      max: 1.0
-      min: 0.05
+      label: Noisy
+      max: 3.04
+      min: 0.150
     bad_2:
-      enabled: true
+      enabled: false
       label: ''
       max: 0.0
       min: 0.0
     great:
       enabled: true
       label: Tight
-      max: 0.01
+      max: 0.030
       min: 0.0
     ok_1:
       enabled: true
       label: Acceptable
-      max: 0.05
-      min: 0.01
+      max: 0.150
+      min: 0.030
     ok_2:
-      enabled: true
+      enabled: false
       label: ''
       max: 0.0
       min: 0.0
@@ -215,12 +227,12 @@ thresholds:
       label: ''
       max: 0.0
       min: 0.0
-  SurfaceFitResidual:
+  "SurfaceFitResidual \xB7 rms":
     bad_1:
       enabled: true
       label: Warped
       max: 0.1
-      min: 0.02
+      min: 0.010
     bad_2:
       enabled: false
       label: ''
@@ -234,7 +246,7 @@ thresholds:
     ok_1:
       enabled: true
       label: Acceptable
-      max: 0.02
+      max: 0.010
       min: 0.005
     ok_2:
       enabled: false

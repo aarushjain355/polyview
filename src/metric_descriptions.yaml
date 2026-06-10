@@ -58,6 +58,14 @@ SpatialDropout:
     High dropout indicates missed detections, occlusion, or shadow artefacts on
     low-reflectivity surfaces.
 
+AverageSpatialDropout:
+  description: >
+    Fraction of the zone the sensor misses on a typical single scan, averaged across
+    all frames in the run. Unlike SpatialDropout (which only flags cells that are
+    permanently dead), this captures scan-pattern jitter — cells that are hit some
+    frames and missed others. Higher than SpatialDropout for sensors whose scan
+    pattern shifts between frames.
+
 PointYieldPerZone:
   description: >
     Fraction of the expected point budget actually measured in each zone. Higher
