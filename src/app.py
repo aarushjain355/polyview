@@ -779,6 +779,24 @@ class PolyViewApp:
         )
         st.plotly_chart(fig, width='stretch', key='3d_scene_chart')
 
+        self._render_bag_download(case_path)
+
+
+    def _render_bag_download(self, case_path: str) -> None:
+        """Surfaces a direct, click-to-download link for the case's rosbag zip when one exists
+        on Drive (shared 'anyone with link' at upload time). Silent when there's no bag."""
+        env = st.session_state.get('selected_environment', '')
+        if not (env and self.selected_lidar and case_path):
+            return
+        try:
+            link = self.database_handler.retrieve_bag_download_link(env, self.selected_lidar, case_path)
+        except Exception:
+            link = None
+        if not link:
+            return
+        st.markdown(f'📦 **Rosbag:** [Download recording (.zip)]({link})')
+        st.caption('Large bags show a one-time Google scan warning — click "Download anyway".')
+
 
     def render_radar_view_button(self):
         if 'show_radar_view' not in st.session_state:

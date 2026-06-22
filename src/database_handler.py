@@ -63,10 +63,34 @@ class DatabaseHandler:
         lidar_id = self._list_children(env_id, self._FOLDER_MIME).get(lidar_name)
         if lidar_id is None:
             return {}
-        spreadsheet_id = self._list_children(lidar_id, self._SHEET_MIME).get(f'{lidar_name} - {case_path}')
+        case_id = self._list_children(lidar_id, self._FOLDER_MIME).get(case_path)
+        if case_id is None:
+            return {}
+        spreadsheet_id = self._list_children(case_id, self._SHEET_MIME).get(f'{lidar_name} - {case_path}')
         if spreadsheet_id is None:
             return {}
         return self._parse_viz_tab(spreadsheet_id)
+
+    def retrieve_bag_download_link(self, env_name: str, lidar_name: str, case_path: str) -> str | None:
+        """Returns a direct, click-to-download URL for the case's rosbag zip, or None if no zip
+        is on Drive. The zip is shared 'anyone with link' at upload time, so this URL downloads
+        without a login (large files show Google's scan-warning page once, then download).
+        """
+        if not self.available:
+            return None
+        env_id = self._list_children(self._root_folder_id, self._FOLDER_MIME).get(env_name)
+        if env_id is None:
+            return None
+        lidar_id = self._list_children(env_id, self._FOLDER_MIME).get(lidar_name)
+        if lidar_id is None:
+            return None
+        case_id = self._list_children(lidar_id, self._FOLDER_MIME).get(case_path)
+        if case_id is None:
+            return None
+        for name, file_id in self._list_all_children(case_id).items():
+            if name.lower().endswith('.zip'):
+                return f'https://drive.google.com/uc?export=download&id={file_id}'
+        return None
 
     def _drive_service(self):
         if self._drive is None:
@@ -104,18 +128,46 @@ class DatabaseHandler:
         return children
 
     def _collect_cases(self, lidar_id: str, lidar_name: str) -> dict:
+        # Each case is now its own folder under the lidar folder; the metrics sheet
+        # (named "<lidar> - <case>") lives inside that case folder alongside the bag zip.
         result: dict = {}
-        prefix = f'{lidar_name} - '
-        for sheet_name, spreadsheet_id in self._list_children(lidar_id, self._SHEET_MIME).items():
-            if not sheet_name.startswith(prefix):
+        for case_path, case_id in self._list_children(lidar_id, self._FOLDER_MIME).items():
+            spreadsheet_id = self._list_children(case_id, self._SHEET_MIME).get(f'{lidar_name} - {case_path}')
+            if spreadsheet_id is None:
                 continue
-            case_path = sheet_name[len(prefix):]
             metrics = self._read_case_metrics(spreadsheet_id)
             if not metrics:
                 continue
             segments = case_path.split('/') if case_path else []
             self._insert_nested(result, segments, metrics)
         return result
+
+    def _list_all_children(self, parent_id: str) -> dict[str, str]:
+        """Like _list_children but without a mime-type filter — used to find the bag zip,
+        whose stored mime type may vary (application/zip vs x-zip-compressed)."""
+        cache_key = (parent_id, '*')
+        cached = self._children_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        children: dict[str, str] = {}
+        page_token = None
+        while True:
+            response = self._drive_service().files().list(
+                q=f"'{parent_id}' in parents and trashed = false",
+                fields='nextPageToken, files(id, name)',
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                corpora='allDrives',
+                pageSize=100,
+                pageToken=page_token,
+            ).execute(num_retries=self._NUM_RETRIES)
+            for item in response.get('files', []):
+                children[item['name']] = item['id']
+            page_token = response.get('nextPageToken')
+            if not page_token:
+                break
+        self._children_cache[cache_key] = children
+        return children
 
     def _insert_nested(self, root: dict, segments: list[str], leaf: dict) -> None:
         if not segments:
