@@ -62,9 +62,266 @@ class PolyViewApp:
             st.session_state.selected_environment = None
 
     def run(self):
+        self.render_welcome_page()
+
+        # Spacing
+        st.markdown("---")
+        st.write("")
+        st.write("")
+
         self.render_lidar_refresh_button()
         self.render_environments_view()
 
+
+
+    def render_welcome_page(self):
+        """
+        Render the PolyView introduction and navigation guide.
+        This page is independent of loaded data so users understand
+        the workflow before retrieving results.
+        """
+
+        # Header
+        st.title("🔬 PolyView LiDAR Evaluation Suite")
+
+        st.markdown(
+            """
+            **A unified dashboard for evaluating LiDAR performance, analyzing
+            sensor behavior, and comparing hardware across controlled experiments.**
+            """
+        )
+
+        st.divider()
+
+        # Workflow overview
+        st.subheader("🚀 Evaluation Workflow")
+
+
+        workflow_steps = [
+            ("📥", "Retrieve", "Load evaluation results"),
+            ("🌎", "Select", "Choose environment & sensor"),
+            ("📊", "Analyze", "Review LiDAR metrics"),
+            ("🌐", "Visualize", "Inspect point cloud data"),
+            ("📈", "Compare", "Benchmark sensors"),
+        ]
+
+        cols = st.columns(len(workflow_steps))
+
+        for idx, (col, (icon, title, description)) in enumerate(zip(cols, workflow_steps)):
+
+            with col:
+                with st.container(border=True):
+
+                    st.markdown(f"## {icon}")
+
+                    st.markdown(
+                        f"""
+                        **{idx + 1}. {title}**
+
+                        {description}
+                        """
+                    )
+
+        st.divider()
+
+        # Getting started
+        st.subheader("📖 Getting Started")
+
+        st.markdown(
+            """
+            PolyView organizes LiDAR evaluation results using the hierarchy:
+
+            ```
+            Environment
+                └── LiDAR Sensor
+                        └── Test Case
+                                └── Metrics
+            ```
+
+            Follow the workflow below to explore results.
+            """
+        )
+
+        workflow_details = [
+            (
+                "📥 1. Retrieve Results",
+                """
+                Click **Retrieve Results** to fetch the latest evaluation
+                results from the database.
+                """
+            ),
+            (
+                "🌎 2. Select Environment",
+                """
+                Select an evaluation environment containing LiDAR sensors
+                and associated test cases.
+                """
+            ),
+            (
+                "📡 3. Select LiDAR",
+                """
+                Choose the sensor you want to analyze. The overview page
+                provides a summary of its performance.
+                """
+            ),
+            (
+                "📊 4. Analyze Metrics",
+                """
+                Review metrics grouped by evaluation category and spatial zone.
+                Metrics are interpreted using configurable quality thresholds.
+                """
+            ),
+            (
+                "🌐 5. Explore Visualization",
+                """
+                Inspect point clouds, expected surfaces, fitted geometry,
+                dropout regions, and problematic points.
+                """
+            ),
+            (
+                "⚖️ 6. Compare LiDARs",
+                """
+                Compare multiple sensors or test cases using multi-sensor
+                comparison charts, normalized scores, and metric distributions.
+                """
+            ),
+        ]
+
+        for title, description in workflow_details:
+            with st.expander(title):
+                st.markdown(description)
+
+        st.divider()
+
+        # Dashboard views
+        st.subheader("🖥 Dashboard Views")
+
+        view_cards = [
+            (
+                "📊",
+                "Metric Overview",
+                "Understand LiDAR performance across evaluation zones.",
+                [
+                    "Performance by evaluation zone",
+                    "Quality bands",
+                    "Threshold interpretation",
+                    "Percentile distributions",
+                ],
+            ),
+            (
+                "🌐",
+                "3D Visualization",
+                "Inspect spatial behavior and point cloud quality.",
+                [
+                    "Point clouds",
+                    "Expected planes",
+                    "PCA fitted surfaces",
+                    "Spatial dropout",
+                    "Worst points",
+                ],
+            ),
+            (
+                "📈",
+                "Multi-Sensor Comparison",
+                "Benchmark LiDAR sensors using normalized metrics.",
+                [
+                    "Compare LiDAR sensors",
+                    "Category-level scores",
+                    "Metric comparisons",
+                    "Sensor benchmarking",
+                ],
+            ),
+            (
+                "📉",
+                "Metric Distribution Analysis",
+                "Analyze consistency, spread, and outliers.",
+                [
+                    "Understand variation",
+                    "Identify outliers",
+                    "Analyze consistency",
+                ],
+            ),
+        ]
+
+        cols = st.columns(2)
+
+        for idx, (icon, title, subtitle, bullets) in enumerate(view_cards):
+
+            with cols[idx % 2]:
+
+                with st.container(border=True):
+
+                    # Header
+                    st.markdown(
+                        f"""
+                        ## {icon} {title}
+                        """
+                    )
+
+                    st.caption(subtitle)
+
+                    st.divider()
+
+                    for item in bullets:
+                        st.markdown(f"- {item}")
+
+        # Metrics explanation
+        st.subheader("📐 Understanding Metrics")
+
+        metric_cols = st.columns(2)
+
+        with metric_cols[0]:
+            st.markdown(
+                """
+                #### Quality Bands
+
+                🟢 **Great**
+
+                Within expected performance.
+
+                🟡 **OK**
+
+                Acceptable performance.
+
+                🔴 **Bad**
+
+                Outside desired range.
+                """
+            )
+
+        with metric_cols[1]:
+            st.markdown(
+                """
+                #### Metric Direction
+
+                **Lower is better**
+
+                - Error
+                - Noise
+                - Dropout
+
+                **Higher is better**
+
+                - Point yield
+                - Density
+                - Coverage
+                """
+            )
+
+        st.divider()
+
+        # Tips
+        st.subheader("💡 Recommended Workflow")
+
+        st.info(
+            """
+            Start with **Metric Overview** → investigate using **3D Visualization**
+            → validate using **Multi-Sensor Comparison Charts**.
+
+            Use **Settings** to adjust metric thresholds when evaluating new
+            sensors or different environments.
+            """
+        )
 
     @property
     def _env_data(self) -> dict:
@@ -254,7 +511,7 @@ class PolyViewApp:
                     st.session_state.pop(f'explore_case_depth_{i}', None)
                 st.rerun()
         with col_radar:
-            if st.button('📡 Radar Comparison', use_container_width=True, key='open_radar_view'):
+            if st.button('Multi-Sensor Comparison', use_container_width=True, key='open_radar_view'):
                 st.session_state.show_radar_view = True
                 st.rerun()
         with col_info:
@@ -724,7 +981,7 @@ class PolyViewApp:
             zone_title = zone.replace('_', ' ').title()
             with ztab:
                 # ---- Radars: category triangle + detailed radar, both cases ------
-                _group_heading('Radars')
+                _group_heading('Multi-Sensor Comparison Charts')
                 detail, cat, radar_colors = {}, {}, []
                 if zone in score_a:
                     detail[case_a_label] = score_a[zone]['detail']
