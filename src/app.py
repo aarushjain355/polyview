@@ -62,16 +62,16 @@ class PolyViewApp:
             st.session_state.selected_environment = None
 
     def run(self):
-        self.render_welcome_page()
+        st.title("🔬 PolyView LiDAR Evaluation Suite")
 
-        # Spacing
+        with st.expander("📖 Instructions & Workflow Guide", expanded=False):
+            self.render_welcome_page()
+
         st.markdown("---")
-        st.write("")
         st.write("")
 
         self.render_lidar_refresh_button()
         self.render_environments_view()
-
 
 
     def render_welcome_page(self):
@@ -475,6 +475,18 @@ class PolyViewApp:
             else:
                 self.render_high_level_metrics_overview()
 
+    @staticmethod
+    def _cost_tier_label(cost, width: int = 500, cap: int = 4000) -> str | None:
+        """Map a lidar cost to a dollar-sign price tier (hiding the actual range): one '$'
+        per `width` band — 0–500 → '$', 500–1000 → '$$', … — capped at `cap // width`
+        signs. Returns None when cost is missing or non-numeric (so callers can show a
+        placeholder)."""
+        if not isinstance(cost, (int, float)):
+            return None
+        max_tiers = max(1, cap // width)
+        tiers = min(int(cost // width) + 1, max_tiers)
+        return r'\$' * tiers
+
     def render_high_level_metrics_overview(self):
         if st.session_state.get('explore_lidar'):
             self.render_explore_further_button()
@@ -523,6 +535,7 @@ class PolyViewApp:
             meta = base_data.get('lidar_metadata', {})
             h = meta.get('lidar_horizontal_fov_deg')
             v = meta.get('lidar_vertical_fov_deg')
+            tier = self._cost_tier_label(meta.get('lidar_cost'))
             st.markdown(
                 f'<div style="font-size:20px; font-weight:800; color:#FFFFFF; '
                 f'letter-spacing:0.05em; text-transform:uppercase; margin:14px 0 8px; '
@@ -531,9 +544,10 @@ class PolyViewApp:
                 f'{lidar_name} · Lidar Info</div>',
                 unsafe_allow_html=True,
             )
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             c1.metric('Horizontal FOV', f'{h:.1f}°' if isinstance(h, (int, float)) else '—')
             c2.metric('Vertical FOV', f'{v:.1f}°' if isinstance(v, (int, float)) else '—')
+            c3.metric('Cost tier', tier if tier else '—')
 
         specs = self._abstract_specs()
         zones = self._zone_keys([base_data], specs)
