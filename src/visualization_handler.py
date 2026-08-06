@@ -7,28 +7,24 @@ import plotly.graph_objects as go
 import yaml
 from plotly.subplots import make_subplots
 
-_CONFIG_PATH = Path(__file__).parent / 'chart_config.yaml'
-_SCHEMAS_PATH = Path(__file__).parent / 'visualization_schemas.yaml'
+_VIZ_PATH = Path(__file__).parent / 'visualization.yaml'
 _CSS_PATH = Path(__file__).parent / 'css' / 'charts.css'
 
 
 class VisualizationHandler:
 
+    # Shared plotly modebar styling. Was repeated inline at every call site.
+    _MODEBAR = dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)',
+                    activecolor='#5138EE')
+
     def __init__(self):
-        with open(_CONFIG_PATH, 'r') as f:
-            self._config = yaml.safe_load(f)
-        with open(_SCHEMAS_PATH, 'r') as f:
-            self._schemas = yaml.safe_load(f)
+        viz = yaml.safe_load(_VIZ_PATH.read_text())
+        self._config = viz['config']
+        self._schemas = viz['schemas']
         self.glow_css = f'<style>{_CSS_PATH.read_text()}</style>'
 
     def make_3d_figure(self, viz_data: dict) -> go.Figure:
         layout = self._config['layout']
-        orientation = viz_data.get('orientation', {})
-        pitch = float(orientation.get('pitch', 0.0))
-        roll = float(orientation.get('roll', 0.0))
-        yaw = float(orientation.get('yaw', 0.0))
-        print(f'[PolyView] orientation: pitch={pitch:.4f} roll={roll:.4f} yaw={yaw:.4f} rad')
-        print(f'[PolyView] link origin: x=0.0000, y=0.0000, z=0.0000')
         fig = go.Figure()
         fig.update_layout(
             scene=dict(
@@ -50,7 +46,7 @@ class VisualizationHandler:
             ),
             margin=dict(t=50, b=20, l=20, r=120),
             title=dict(text='<b>3D LiDAR Scene</b>', font=dict(color='white', size=16), x=0.5),
-            modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
+            modebar=self._MODEBAR,
         )
         return fig
 
@@ -476,7 +472,7 @@ class VisualizationHandler:
                         bordercolor='rgba(255,255,255,0.1)',
                         borderwidth=1,
                     ),
-                    modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
+                    modebar=self._MODEBAR,
                 )
                 fig.update_yaxes(range=y_range)
                 keys = list(fig_items.keys())
@@ -565,124 +561,6 @@ class VisualizationHandler:
                 showlegend=True,
             ))
 
-    def render_overview_radar(self, metrics_data: dict, per_lidar_thresholds: dict = None, exclude_categories: set = None, radar_metrics_key: str = 'radar_metrics') -> go.Figure:
-        if not metrics_data:
-            return go.Figure()
-
-        layout = self._config['layout']
-        lidar_names = list(metrics_data.keys())
-        colors = self._colors(len(lidar_names))
-
-        radar_metrics = self._schemas[radar_metrics_key]
-        radar_categories = [
-            cat for cat in radar_metrics
-            if cat not in (exclude_categories or set())
-            and any(radar_metrics[cat]['key'] in metrics_data[l].get(cat, {}) for l in lidar_names)
-        ]
-        if not radar_categories:
-            return go.Figure()
-
-        raw: dict[str, list[float]] = {cat: [] for cat in radar_categories}
-        for lidar in lidar_names:
-            for cat in radar_categories:
-                key = radar_metrics[cat]['key']
-                val = float(metrics_data[lidar].get(cat, {}).get(key, 0) or 0)
-                raw[cat].append(val)
-
-        fig = go.Figure()
-
-        # Background zone rings — drawn outside-in so inner polygons cover outer ones
-        theta_ring = radar_categories + [radar_categories[0]]
-        for r_val, fill_color, border_color in [
-            (1.0,  'rgba(57,255,20,0.13)',  'rgba(57,255,20,0.30)'),
-            (0.75, 'rgba(255,200,0,0.15)',  'rgba(255,200,0,0.35)'),
-            (0.40, 'rgba(255,50,50,0.18)',  'rgba(255,50,50,0.40)'),
-        ]:
-            fig.add_trace(go.Scatterpolar(
-                r=[r_val] * len(theta_ring),
-                theta=theta_ring,
-                fill='toself',
-                fillcolor=fill_color,
-                line=dict(width=0.8, color=border_color),
-                showlegend=False,
-                hoverinfo='skip',
-            ))
-
-        for lidar_idx, lidar_name in enumerate(lidar_names):
-            scores = []
-            lidar_thresholds = (per_lidar_thresholds or {}).get(lidar_name, {})
-            for cat in radar_categories:
-                key = radar_metrics[cat]['key']
-                lower_is_better = radar_metrics[cat]['lower_is_better']
-                val = float(metrics_data[lidar_name].get(cat, {}).get(key, 0) or 0)
-
-                abs_score = self._radar_score(val, key, lower_is_better, lidar_thresholds.get(cat))
-                if abs_score is not None:
-                    scores.append(round(abs_score, 3))
-                else:
-                    vals = raw[cat]
-                    mn, mx = min(vals), max(vals)
-                    norm = (val - mn) / (mx - mn) if mx != mn else 0.5
-                    scores.append(round((1 - norm) if lower_is_better else norm, 3))
-
-            theta = radar_categories + [radar_categories[0]]
-            r = scores + [scores[0]]
-            color = colors[lidar_idx]
-
-            fig.add_trace(go.Scatterpolar(
-                r=r,
-                theta=theta,
-                fill='toself',
-                fillcolor=self._hex_to_rgba(color, 0.22),
-                line=dict(color=color, width=3),
-                marker=dict(size=7, color=color, symbol='circle', line=dict(color='white', width=1.5)),
-                name=lidar_name,
-                hovertemplate='<b>%{theta}</b><br>Score: <b>%{r:.3f}</b><extra>' + lidar_name + '</extra>',
-            ))
-
-        fig.update_layout(
-            polar=dict(
-                bgcolor='rgba(10,12,20,0.85)',
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1],
-                    tickfont=dict(size=9, color='rgba(255,255,255,0.55)'),
-                    gridcolor='rgba(255,255,255,0.08)',
-                    linecolor='rgba(255,255,255,0.06)',
-                    tickvals=[0.20, 0.575, 0.875],
-                    ticktext=['bad', 'ok', 'great'],
-                ),
-                angularaxis=dict(
-                    tickfont=dict(size=13, color='rgba(255,255,255,0.9)', family='sans-serif'),
-                    gridcolor='rgba(255,255,255,0.06)',
-                    linecolor='rgba(255,255,255,0.1)',
-                    direction='clockwise',
-                ),
-            ),
-            showlegend=True,
-            legend=dict(
-                font=dict(size=12, color='white'),
-                bgcolor='rgba(10,12,20,0.9)',
-                bordercolor='rgba(81,56,238,0.35)',
-                borderwidth=1,
-                x=1.08, y=1.0,
-                itemsizing='constant',
-                itemclick='toggleothers',
-                itemdoubleclick='toggle',
-            ),
-            paper_bgcolor=layout['paper_color'],
-            height=620,
-            title=dict(
-                text='<b>Overall LiDAR Performance</b>  ·  green = great  ·  yellow = ok  ·  red = bad',
-                font=dict(size=14, color='rgba(255,255,255,0.65)', family='sans-serif'),
-                x=0.5, xanchor='center',
-            ),
-            margin=dict(t=70, b=50, l=100, r=220),
-            modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
-        )
-
-        return fig
-
     def make_abstract_radar_figure(self, zone_name: str, lidar_scores: dict, colors: list | None = None) -> go.Figure:
         if not lidar_scores:
             return go.Figure()
@@ -749,359 +627,9 @@ class VisualizationHandler:
             paper_bgcolor=layout['paper_color'],
             height=560,
             margin=dict(t=115, b=50, l=100, r=220),
-            modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
+            modebar=self._MODEBAR,
         )
         return fig
-
-    def render_per_zone_radars(self, comparison_data: dict, thresholds: dict) -> list[tuple[str, go.Figure]]:
-        zone_radar_metrics = self._schemas.get('zone_radar_metrics', {})
-        known_zones = self._schemas.get('key_labels', {}).get('zones', {})
-        if not zone_radar_metrics or not known_zones:
-            return []
-        layout = self._config['layout']
-        colors = self._colors(len(comparison_data))
-        figs = []
-        for zone_key, zone_label in known_zones.items():
-            # Build axes: one per category, each with one or more scored sub-keys
-            radar_axes: list[tuple[str, list[tuple[str, str, bool]]]] = []
-            for cat, cat_cfg in zone_radar_metrics.items():
-                valid_keys = []
-                for entry in cat_cfg.get('keys', []):
-                    full_key = f'{zone_key}_{entry["key_suffix"]}'
-                    if any(full_key in case_data.get(cat, {}) for case_data in comparison_data.values()):
-                        valid_keys.append((full_key, entry['threshold_key'], entry['lower_is_better']))
-                if valid_keys:
-                    radar_axes.append((cat, valid_keys))
-            if len(radar_axes) < 3:
-                continue
-            categories = [cat for cat, _ in radar_axes]
-            fig = go.Figure()
-            theta_ring = categories + [categories[0]]
-            for r_val, fill_color, border_color in [
-                (1.0,  'rgba(57,255,20,0.13)',  'rgba(57,255,20,0.30)'),
-                (0.75, 'rgba(255,200,0,0.15)',  'rgba(255,200,0,0.35)'),
-                (0.40, 'rgba(255,50,50,0.18)',  'rgba(255,50,50,0.40)'),
-            ]:
-                fig.add_trace(go.Scatterpolar(
-                    r=[r_val] * len(theta_ring), theta=theta_ring,
-                    fill='toself', fillcolor=fill_color,
-                    line=dict(width=0.8, color=border_color),
-                    showlegend=False, hoverinfo='skip',
-                ))
-            for case_idx, (case_label, case_data) in enumerate(comparison_data.items()):
-                scores = []
-                for cat, key_entries in radar_axes:
-                    sub_scores = []
-                    for full_key, threshold_key, lower_is_better in key_entries:
-                        val = float(case_data.get(cat, {}).get(full_key, 0) or 0)
-                        score = self._radar_score(val, full_key, lower_is_better, thresholds.get(threshold_key))
-                        if score is not None:
-                            sub_scores.append(score)
-                    scores.append(round(sum(sub_scores) / len(sub_scores), 3) if sub_scores else 0.5)
-                color = colors[case_idx]
-                fig.add_trace(go.Scatterpolar(
-                    r=scores + [scores[0]],
-                    theta=categories + [categories[0]],
-                    fill='toself',
-                    fillcolor=self._hex_to_rgba(color, 0.22),
-                    line=dict(color=color, width=3),
-                    marker=dict(size=7, color=color, symbol='circle', line=dict(color='white', width=1.5)),
-                    name=case_label,
-                    hovertemplate='<b>%{theta}</b><br>Score: <b>%{r:.3f}</b><extra>' + case_label + '</extra>',
-                ))
-            fig.update_layout(
-                polar=dict(
-                    bgcolor='rgba(10,12,20,0.85)',
-                    radialaxis=dict(
-                        visible=True, range=[0, 1],
-                        tickfont=dict(size=9, color='rgba(255,255,255,0.55)'),
-                        gridcolor='rgba(255,255,255,0.08)',
-                        linecolor='rgba(255,255,255,0.06)',
-                        tickvals=[0.20, 0.575, 0.875],
-                        ticktext=['bad', 'ok', 'great'],
-                    ),
-                    angularaxis=dict(
-                        tickfont=dict(size=12, color='rgba(255,255,255,0.9)', family='sans-serif'),
-                        gridcolor='rgba(255,255,255,0.06)',
-                        linecolor='rgba(255,255,255,0.1)',
-                        direction='clockwise',
-                    ),
-                ),
-                title=dict(
-                    text=f'<b>{zone_label}</b>  ·  green = great  ·  yellow = ok  ·  red = bad',
-                    font=dict(size=14, color='rgba(255,255,255,0.65)'), x=0.5, xanchor='center',
-                ),
-                showlegend=True,
-                legend=dict(
-                    font=dict(size=12, color='white'), bgcolor='rgba(10,12,20,0.9)',
-                    bordercolor='rgba(81,56,238,0.35)', borderwidth=1,
-                    x=1.08, y=1.0, itemsizing='constant',
-                ),
-                paper_bgcolor=layout['paper_color'],
-                height=520,
-                margin=dict(t=70, b=50, l=100, r=220),
-                modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
-            )
-            figs.append((zone_label, fig))
-        return figs
-
-    def render_metrics_comparison(self, metrics_data: dict) -> go.Figure:
-        categories = self._collect_categories(metrics_data)
-        if not categories:
-            return go.Figure()
-
-        _excluded = {'NoiseRegionContamination', 'ZoneIntensityMean', 'IntensityUniformity'}
-        categories = {k: v for k, v in categories.items() if k not in _excluded}
-
-        layout = self._config['layout']
-        lidar_names = list(metrics_data.keys())
-        colors = self._colors(len(lidar_names))
-        n_rows = len(categories)
-
-        vertical_spacing = min(layout['subplot_vertical_spacing'], 1.0 / (2 * max(n_rows - 1, 1)))
-
-        fig = make_subplots(
-            rows=n_rows, cols=1,
-            subplot_titles=list(categories.keys()),
-            vertical_spacing=vertical_spacing,
-        )
-
-        for row, (category, metric_names) in enumerate(categories.items(), start=1):
-            if category in self._schemas['box_mappings']:
-                self._add_box_traces(fig, metrics_data, lidar_names, colors, category, row)
-            elif category in self._schemas['error_bar_mappings']:
-                self._add_error_bar_traces(fig, metrics_data, lidar_names, colors, category, row)
-            elif category in self._schemas['fraction_metrics']:
-                self._add_fraction_traces(fig, metrics_data, lidar_names, colors, category, row)
-            else:
-                self._add_bar_traces(fig, metrics_data, lidar_names, colors, category, metric_names, row)
-
-            self._style_axes(fig, row, layout, category)
-
-        title_annotations = [a for a in fig.layout.annotations if a.yref == 'paper']
-        for annotation in title_annotations:
-            annotation.font = dict(size=layout['subplot_title_font_size'], color='white', family='sans-serif')
-            annotation.bgcolor = 'rgba(81,56,238,0.1)'
-            annotation.bordercolor = 'rgba(81,56,238,0.3)'
-            annotation.borderwidth = 1
-            annotation.borderpad = 7
-
-        fig.update_layout(
-            height=layout['subplot_height_per_row'] * n_rows,
-            barmode='group',
-            bargap=0.28,
-            bargroupgap=0.06,
-            uniformtext=dict(minsize=8, mode='show'),
-            legend=dict(
-                title=dict(text=f"<b>{layout['legend_title']}</b>", font=dict(size=layout['legend_font_size'] + 2, color='white')),
-                font=dict(size=layout['legend_font_size'], color='rgba(255,255,255,0.9)'),
-                bgcolor='rgba(10,12,20,0.9)',
-                bordercolor='rgba(81,56,238,0.3)',
-                borderwidth=1,
-                orientation='v',
-                x=1.01, xanchor='left',
-                y=1.0, yanchor='top',
-                itemsizing='constant',
-                itemclick='toggleothers',
-                itemdoubleclick='toggle',
-            ),
-            template=layout['template'],
-            paper_bgcolor=layout['paper_color'],
-            plot_bgcolor='rgba(8,10,18,0.0)',
-            margin=dict(t=50, b=80, l=90, r=230),
-            hoverlabel=dict(
-                bgcolor='#0d0f1a',
-                font_size=13,
-                font_color='white',
-                bordercolor='rgba(81,56,238,0.6)',
-                namelength=-1,
-            ),
-            modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
-            dragmode='zoom',
-        )
-
-        return fig
-
-    def _gradient_marker(self, values: list, color: str) -> dict:
-        """Value-driven opacity — brighter bars = higher absolute value."""
-        abs_vals = [abs(v) for v in values]
-        if not abs_vals:
-            return dict(color=color, line=dict(color=color, width=1.5))
-        mx = max(abs_vals) or 1
-        bar_colors = [self._interpolate_color(color, t / mx) for t in abs_vals]
-        return dict(color=bar_colors, line=dict(color=color, width=1.5))
-
-    def _interpolate_color(self, hex_color: str, t: float) -> str:
-        h = hex_color.lstrip('#')
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f'rgba({r},{g},{b},{0.4 + 0.6 * t:.3f})'
-
-    def _add_box_traces(self, fig, metrics_data, lidar_names, colors, category, row):
-        mapping = self._schemas['box_mappings'][category]
-        for lidar_idx, lidar_name in enumerate(lidar_names):
-            d = metrics_data[lidar_name].get(category, {})
-            color = colors[lidar_idx]
-            fig.add_trace(go.Box(
-                name=lidar_name,
-                x=[lidar_name],
-                lowerfence=[d.get(mapping['low'])] if mapping.get('low') and d.get(mapping['low']) is not None else None,
-                q1=[d.get(mapping['q1'], 0)],
-                median=[d.get(mapping['median'], 0)],
-                q3=[d.get(mapping['q3'], 0)],
-                upperfence=[d.get(mapping['high'], 0)],
-                mean=[d.get(mapping['mean'], 0)],
-                marker=dict(color=color, size=10, symbol='diamond', line=dict(color='white', width=1.5)),
-                line=dict(color=color, width=2.5),
-                fillcolor=self._hex_to_rgba(color, 0.22),
-                whiskerwidth=0.6,
-                boxmean=True,
-                hovertemplate=(
-                    f'<b>{lidar_name}</b><br>'
-                    'Median: %{median:.5g}<br>'
-                    'Q1 / Q3: %{q1:.5g} / %{q3:.5g}'
-                    '<extra></extra>'
-                ),
-                showlegend=(row == 1),
-            ), row=row, col=1)
-
-    def _add_error_bar_traces(self, fig, metrics_data, lidar_names, colors, category, row):
-        raw_mapping = self._schemas['error_bar_mappings'][category]
-        sample = next(iter(metrics_data.values()), {}).get(category, {})
-
-        # Expand each mapping entry into all zone-prefixed variants found in data
-        mapping = []
-        for entry in raw_mapping:
-            mean_key = entry['mean_key']
-            std_key = entry['std_key']
-            for k in sorted(sample):
-                if k == mean_key or k.endswith(f'_{mean_key}'):
-                    prefix = k[: -len(mean_key)].rstrip('_')
-                    matched_std = f'{prefix}_{std_key}' if std_key and prefix else std_key
-                    mapping.append({
-                        'label': self._label_key(k),
-                        'mean_key': k,
-                        'std_key': matched_std if matched_std in sample else None,
-                    })
-
-        if not mapping:
-            return
-
-        zones = [z['label'] for z in mapping]
-        n_lidars = len(lidar_names)
-        bar_slot_width = 0.72 * 0.94 / n_lidars
-        for lidar_idx, lidar_name in enumerate(lidar_names):
-            d = metrics_data[lidar_name].get(category, {})
-            means = [d.get(z['mean_key'], 0) for z in mapping]
-            stds = [d.get(z['std_key'], 0) if z['std_key'] else 0 for z in mapping]
-            color = colors[lidar_idx]
-            fig.add_trace(go.Bar(
-                name=lidar_name,
-                x=zones,
-                y=means,
-                error_y=dict(
-                    type='data', array=stds, visible=True,
-                    color=self._hex_to_rgba(color, 0.8),
-                    thickness=2, width=6,
-                ),
-                marker=self._gradient_marker(means, color),
-                hovertemplate=f'<b>{lidar_name}</b><br>Zone: %{{x}}<br>Mean: %{{y:.5g}}<extra></extra>',
-                showlegend=(row == 1),
-            ), row=row, col=1)
-
-            x_offset = (lidar_idx - (n_lidars - 1) / 2) * bar_slot_width
-            for zone_idx, (mean, std) in enumerate(zip(means, stds)):
-                fig.add_annotation(
-                    x=zone_idx + x_offset, y=mean + std,
-                    text=f'{mean:.4g}',
-                    yshift=10,
-                    showarrow=False,
-                    font=dict(size=10, color='rgba(255,255,255,0.85)', family='monospace'),
-                    xanchor='center', yanchor='bottom',
-                    row=row, col=1,
-                )
-
-    def _add_fraction_traces(self, fig, metrics_data, lidar_names, colors, category, row):
-        all_keys: set = set()
-        for lidar_name in lidar_names:
-            all_keys.update(metrics_data[lidar_name].get(category, {}).keys())
-        fraction_keys = sorted(k for k in all_keys if k.endswith('_frac'))
-        labels = [k.replace('_frac', '').replace('_', ' ') for k in fraction_keys]
-        for lidar_idx, lidar_name in enumerate(lidar_names):
-            d = metrics_data[lidar_name].get(category, {})
-            fracs = [d.get(k, 0) for k in fraction_keys]
-            color = colors[lidar_idx]
-            fig.add_trace(go.Bar(
-                name=lidar_name,
-                x=labels,
-                y=fracs,
-                marker=self._gradient_marker(fracs, color),
-                text=[f'{f * 100:.2f}%' for f in fracs],
-                textposition='outside',
-                textfont=dict(size=10, color='rgba(255,255,255,0.85)', family='monospace'),
-                hovertemplate=f'<b>{lidar_name}</b><br>%{{x}}: <b>%{{y:.3%}}</b><extra></extra>',
-                showlegend=(row == 1),
-            ), row=row, col=1)
-
-    def _add_bar_traces(self, fig, metrics_data, lidar_names, colors, category, metric_names, row):
-        for lidar_idx, lidar_name in enumerate(lidar_names):
-            d = metrics_data[lidar_name].get(category, {})
-            values = [d.get(m, 0) for m in metric_names]
-            color = colors[lidar_idx]
-            fig.add_trace(go.Bar(
-                name=lidar_name,
-                x=metric_names,
-                y=values,
-                marker=self._gradient_marker(values, color),
-                text=[f'{v:.4g}' for v in values],
-                textposition='outside',
-                textfont=dict(size=10, color='rgba(255,255,255,0.85)', family='monospace'),
-                hovertemplate=f'<b>{lidar_name}</b><br>%{{x}}: <b>%{{y:.6g}}</b><extra></extra>',
-                showlegend=(row == 1),
-            ), row=row, col=1)
-
-        if any(k in category for k in ('Error', 'Offset', 'Residual')):
-            fig.add_hline(y=0, line=dict(color='rgba(255,255,255,0.18)', width=1, dash='dot'), row=row, col=1)
-
-    def _style_axes(self, fig, row, layout, category: str = ''):
-        units = self._schemas['category_units'].get(category, '')
-        y_title = f'Value ({units})' if units else 'Value'
-        fig.update_xaxes(
-            row=row, col=1,
-            tickangle=-40,
-            tickfont=dict(size=layout['tick_font_size'] + 1, color='rgba(255,255,255,0.95)', family='sans-serif'),
-            showgrid=False,
-            linecolor='rgba(255,255,255,0.08)',
-            zeroline=False,
-            ticks='outside', ticklen=5, tickcolor='rgba(255,255,255,0.15)',
-        )
-        fig.update_yaxes(
-            row=row, col=1,
-            tickfont=dict(size=layout['tick_font_size'], color='rgba(255,255,255,0.7)'),
-            gridcolor='rgba(255,255,255,0.04)',
-            zerolinecolor='rgba(255,255,255,0.2)',
-            zerolinewidth=1,
-            title_text=f'<b>{y_title}</b>',
-            title_font=dict(size=layout['axis_label_font_size'] + 1, color='rgba(255,255,255,0.95)'),
-            tickformat='.3g',
-            autorange=True,
-            ticks='outside', ticklen=5, tickcolor='rgba(255,255,255,0.15)',
-        )
-
-    def _collect_categories(self, metrics_data: dict) -> dict[str, list[str]]:
-        categories: dict[str, set] = {}
-        for lidar_metrics in metrics_data.values():
-            for category, metrics in lidar_metrics.items():
-                if category not in categories:
-                    categories[category] = set()
-                categories[category].update(metrics.keys())
-        return {cat: sorted(metrics) for cat, metrics in categories.items()}
-
-    def _fraction_color(self, value: float) -> str:
-        if value < 0.05:
-            return '#39FF14'
-        elif value < 0.15:
-            return '#FFD700'
-        return '#FF6B6B'
 
     def _hex_to_rgba(self, hex_color: str, alpha: float) -> str:
         h = hex_color.lstrip('#')
@@ -1111,46 +639,6 @@ class VisualizationHandler:
     def _colors(self, n: int) -> list[str]:
         palette = self._config['palette']
         return [palette[i % len(palette)] for i in range(n)]
-
-    def _score_against_zones(self, val: float, zones: dict, lower_is_better: bool) -> float | None:
-        # Zone scores aligned with radar ring boundaries (bad<0.40, ok 0.40-0.75, great>0.75)
-        ZONE_SCORES = {'great': 1.0, 'ok_1': 0.65, 'ok_2': 0.50, 'bad_1': 0.28, 'bad_2': 0.12}
-        enabled = []
-        for name, score in ZONE_SCORES.items():
-            z = zones.get(name, {})
-            if z.get('enabled') and float(z.get('max', 0)) > float(z.get('min', 0)):
-                mn, mx = float(z['min']), float(z['max'])
-                enabled.append((mn, mx, score))
-        if not enabled:
-            return None
-        # Build piecewise-linear breakpoints from zone midpoints so similar values
-        # on either side of a zone boundary get similar scores (no cliffs)
-        enabled.sort(key=lambda t: t[0], reverse=not lower_is_better)
-        points = [(mn + (mx - mn) / 2, sc) for mn, mx, sc in enabled]
-        # Anchor at the outer edges of the first and last zones
-        best_edge = enabled[0][0] if lower_is_better else enabled[0][1]
-        worst_edge = enabled[-1][1] if lower_is_better else enabled[-1][0]
-        points = [(best_edge, 1.0)] + points + [(worst_edge, 0.05)]
-        if lower_is_better:
-            points.sort(key=lambda t: t[0])
-            if val <= points[0][0]:
-                return points[0][1]
-            if val >= points[-1][0]:
-                return points[-1][1]
-        else:
-            points.sort(key=lambda t: t[0], reverse=True)
-            if val >= points[0][0]:
-                return points[0][1]
-            if val <= points[-1][0]:
-                return points[-1][1]
-        for i in range(len(points) - 1):
-            v0, s0 = points[i]
-            v1, s1 = points[i + 1]
-            lo, hi = (v0, v1) if lower_is_better else (v1, v0)
-            if lo <= val <= hi:
-                t = (val - lo) / (hi - lo) if (hi - lo) != 0 else 0.5
-                return round(s0 + t * (s1 - s0), 3) if lower_is_better else round(s0 + (1 - t) * (s1 - s0), 3)
-        return None
 
     def make_bullet_figure(
         self,
@@ -1358,49 +846,9 @@ class VisualizationHandler:
                        tickformat='.3g', ticksuffix=value_suffix, zeroline=False),
             yaxis=dict(color='white', tickfont=dict(size=12), showgrid=False, automargin=True),
             showlegend=False,
-            modebar=dict(bgcolor='rgba(0,0,0,0)', color='rgba(255,255,255,0.2)', activecolor='#5138EE'),
+            modebar=self._MODEBAR,
         )
         return fig
-
-    def make_gauge_figure(self, label: str, value: float, suffix: str = '') -> go.Figure:
-        filled = min(value, 100.0)
-        empty = 100.0 - filled
-        color = '#00BFFF'
-        zone_raw = label[: -len(suffix)] if suffix and label.endswith(suffix) else label
-        zone = zone_raw.replace('_', ' ').title()
-        fig = go.Figure()
-        fig.add_trace(go.Pie(
-            values=[filled, empty],
-            hole=0.72,
-            marker=dict(colors=[color, '#1a1a2e']),
-            showlegend=False,
-            textinfo='none',
-            hoverinfo='skip',
-            sort=False,
-            direction='clockwise',
-            rotation=90,
-        ))
-        fig.update_layout(
-            annotations=[
-                dict(text=f'<b>{value:.2f}%</b>', x=0.5, y=0.55, font=dict(size=28, color='white'), showarrow=False),
-                dict(text=zone, x=0.5, y=0.38, font=dict(size=14, color='rgba(255,255,255,0.6)'), showarrow=False),
-            ],
-            height=420,
-            margin=dict(l=20, r=20, t=20, b=20),
-            paper_bgcolor='#0e1117',
-        )
-        return fig
-
-    def _radar_score(self, val: float, metric_key: str, lower_is_better: bool, threshold_config) -> float | None:
-        if threshold_config is None:
-            return None
-        if isinstance(threshold_config, list):
-            zones = next((e for e in threshold_config if metric_key in e.get('keys', [])), None)
-        else:
-            zones = threshold_config
-        if not zones:
-            return None
-        return self._score_against_zones(val, zones, lower_is_better)
 
     @staticmethod
     def score_abstract(val: float, bands: dict, lower_is_better: bool) -> float:

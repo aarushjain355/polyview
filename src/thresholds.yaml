@@ -1,3 +1,11 @@
+# Consolidated threshold config for PolyView.
+#
+#   thresholds:          baseline per-metric thresholds (settings.yaml overrides these)
+#   abstract_thresholds: per-category bands for the abstract scoring view
+#   lidar_overrides:     per-lidar overrides, merged over `thresholds` by _resolve_thresholds
+#
+# Replaces the former defaults.yaml + lidar_thresholds.yaml pair.
+
 thresholds:
   "RangeDistributionHealth · std":
     great:  {enabled: false, min: 0.0,   max: 0.030, label: 'Tight'}
@@ -176,3 +184,59 @@ abstract_thresholds:
         great: {min: 0.0,   max: 0.020} # Under 2 cm: Tight geometric fit, standard sensor accuracy limit
         ok:    {min: 0.020, max: 0.060} # 2 cm to 6 cm: Tolerable variance over mixed geometric regions
         bad:   {min: 0.060, max: 0.200} # Over 6 cm: Terrible fit, mixing distinct objects or severe distortion
+
+lidar_overrides:
+  E1R:
+    RangeDistributionHealth:
+      bad_1:
+        enabled: true
+        label: Way Farther
+        max: 2.5
+        min: 2.3
+      bad_2:
+        enabled: true
+        label: Way Near
+        max: 1.8
+        min: 1.5
+      great:
+        enabled: true
+        label: Accurate
+        max: 2.08
+        min: 1.93
+      ok_1:
+        enabled: true
+        label: Slightly Farther
+        max: 2.3
+        min: 2.08
+      ok_2:
+        enabled: true
+        label: Slightly Near
+        max: 1.93
+        min: 1.8
+  Hesai:
+    RangeDistributionHealth:
+      bad_1:
+        enabled: true
+        label: Way Farther
+        max: 2.65
+        min: 2.55
+      bad_2:
+        enabled: true
+        label: Way Near
+        max: 2.15
+        min: 2.0
+      great:
+        enabled: true
+        label: Accurate
+        max: 2.41
+        min: 2.3
+      ok_1:
+        enabled: true
+        label: Slightly Farther
+        max: 2.55
+        min: 2.41
+      ok_2:
+        enabled: true
+        label: Slightly Near
+        max: 2.3
+        min: 2.15

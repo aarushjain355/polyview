@@ -3,47 +3,61 @@ from pathlib import Path
 
 import streamlit as st
 import yaml
-import database_handler
+from lidar_eval_backends.lidar_database_handler import LidarDatabaseHandler
 import visualization_handler
 import time
 
 st.set_page_config(layout='wide', page_title='PolyView LiDAR')
 
-# Comparison-view only: Case 1 red, Case 2 teal. Shared by the case header chips
-# and the comparison chart series so the legends match the headings. Other views
-# keep the default palette.
-CASE_COLORS = ('#FF4B4B', '#2EC4B6')
-
-_LOGO_CSS = (Path(__file__).parent / 'css' / 'logo.css').read_text()
-
-_LOGO_PATH = Path(__file__).parent / 'css' / 'polymath_robotics_logo.png'
-
-st.sidebar.markdown(f'<style>{_LOGO_CSS}</style>', unsafe_allow_html=True)
-st.sidebar.image(str(_LOGO_PATH), use_container_width=True)
-st.sidebar.markdown(
-    '<span class="polyview-logo">PolyView</span>'
-    '<span class="polyview-tagline">LiDAR Evaluation Suite</span>'
-    '<hr class="polyview-divider">',
-    unsafe_allow_html=True,
-)
-
 class PolyViewApp:
 
+    # Comparison-view only: Case 1 red, Case 2 teal. Shared by the case header chips
+    # and the comparison chart series so the legends match the headings. Other views
+    # keep the default palette.
+    CASE_COLORS = ('#FF4B4B', '#2EC4B6')
+
+    _LOGO_CSS = (Path(__file__).parent / 'css' / 'logo.css').read_text()
+    _LOGO_PATH = Path(__file__).parent / 'css' / 'polymath_robotics_logo.png'
+
+    def refresh_tokens(self):
+        """(Re)authenticate the results-database handler and refresh its credentials.
+
+        Prefer 1Password via the backend's authenticate() — the local flow is
+        `eval $(op signin)` then `streamlit run`, so it reuses your terminal's 1Password session.
+        If that fails (Streamlit Cloud has no `op` CLI), fall back to injected
+        st.secrets['database_credentials'].
+        """
+        try:
+            self.database_handler.authenticate()
+        except Exception as op_err:
+            try:
+                creds = dict(st.secrets['database_credentials'])
+            except Exception:
+                raise RuntimeError(
+                    f'Could not authenticate to the results database: 1Password failed '
+                    f'({op_err}) and no [database_credentials] secret is configured.'
+                ) from op_err
+            self.database_handler.load_credentials(creds)
+
     def __init__(self):
-        self.database_handler = database_handler.DatabaseHandler(
-            credentials_info=dict(st.secrets["google_sheets"]),
-            root_folder_id=st.secrets["root_folder_id"],
-        )
+        # Cached in session_state so a Streamlit rerun reuses the authenticated handler
+        # instead of re-running the 1Password flow on every interaction.
+        self.database_handler = st.session_state.get('database_handler')
+        if self.database_handler is None:
+            self.database_handler = LidarDatabaseHandler()
+            self.refresh_tokens()
+            st.session_state.database_handler = self.database_handler
         self.visualization_handler = visualization_handler.VisualizationHandler()
-        descriptions_path = Path(__file__).parent / 'metric_descriptions.yaml'
-        with open(descriptions_path, 'r') as f:
-            self.metric_descriptions = yaml.safe_load(f)
+
         settings_path = Path(__file__).parent / 'settings.yaml'
         with open(settings_path, 'r') as f:
             self._settings = yaml.safe_load(f)
-        lidar_thresholds_path = Path(__file__).parent / 'lidar_thresholds.yaml'
-        with open(lidar_thresholds_path, 'r') as f:
-            self._lidar_thresholds = yaml.safe_load(f) or {}
+
+        thresholds_path = Path(__file__).parent / 'thresholds.yaml'
+        with open(thresholds_path, 'r') as f:
+            self._thresholds_file = yaml.safe_load(f) or {}
+        self._lidar_thresholds = self._thresholds_file.get('lidar_overrides', {})
+
         if 'env_names' not in st.session_state:
             st.session_state.env_names = []
         if 'metrics_data' not in st.session_state:
@@ -61,7 +75,18 @@ class PolyViewApp:
         if 'selected_environment' not in st.session_state:
             st.session_state.selected_environment = None
 
+    def _render_sidebar_branding(self):
+        st.sidebar.markdown(f'<style>{self._LOGO_CSS}</style>', unsafe_allow_html=True)
+        st.sidebar.image(str(self._LOGO_PATH), use_container_width=True)
+        st.sidebar.markdown(
+            '<span class="polyview-logo">PolyView</span>'
+            '<span class="polyview-tagline">LiDAR Evaluation Suite</span>'
+            '<hr class="polyview-divider">',
+            unsafe_allow_html=True,
+        )
+
     def run(self):
+        self._render_sidebar_branding()
         st.title("🔬 PolyView LiDAR Evaluation Suite")
 
         with st.expander("📖 Instructions & Workflow Guide", expanded=False):
@@ -730,6 +755,21 @@ class PolyViewApp:
         first_inner = next(iter(first_val.values()), None)
         return isinstance(first_inner, (int, float))
 
+    @property
+    def _layer_adders(self):
+        """Single source of truth for the 3D layers: (display name, draw fn), in draw
+        order. Both render_3d_view and the visible-layers checkbox panel derive from
+        this, so a layer can't draw without a toggle, nor a toggle control nothing."""
+        vh = self.visualization_handler
+        return [
+            ('PointCloud', vh.add_point_cloud),
+            ('Expected Planes', vh.add_expected_planes),
+            ('Cropped Expected', vh.add_cropped_expected_planes),
+            ('Fitted PCA Plane', vh.add_fitted_pca_plane),
+            ('Spatial Dropout Analysis', vh.add_spatial_dropout_analysis),
+            ('Worst Points', vh.add_worst_points),
+        ]
+
     def render_3d_view(self):
         if not st.session_state.visualization_data:
             st.info('No visualization data loaded. Click "Retrieve Results".')
@@ -864,75 +904,6 @@ class PolyViewApp:
                 st.plotly_chart(fig, use_container_width=True, key=f'abstract_radar_{zone}')
 
 
-    def render_lidar_view_button(self):
-        st.selectbox(
-            'View Mode',
-            options=['3D Visualization', 'Lidar Metrics Comparison', 'Lidar Metrics Information'],
-            key='view_mode'
-        )
-
-        if st.session_state.view_mode == '3D Visualization':
-            self.render_lidars_markdown()
-            self.render_3d_view()
-            self.render_lidar_metrics()
-
-        elif st.session_state.view_mode == 'Lidar Metrics Comparison':
-            self.render_comparison_graphs()
-
-        elif st.session_state.view_mode == 'Lidar Metrics Information':
-            self.render_metrics_page()
-
-
-    def render_metrics_page(self):
-        st.title('LiDAR Metrics Reference')
-        case_path = st.session_state.get('explore_case_path', 'base') or 'base'
-        st.caption(f'Showing values for case: `{case_path}` · environment: `{st.session_state.get("selected_environment", "—")}`')
-        st.markdown('_Reference guide for all metrics computed during LiDAR evaluation._')
-
-        schemas = self.visualization_handler._schemas
-        radar_metrics = schemas['radar_metrics']
-        category_units = schemas['category_units']
-
-        segments = [s for s in case_path.split('/') if s]
-
-        def resolve_case(lidar_data: dict) -> dict:
-            cursor = lidar_data
-            for seg in segments:
-                if not isinstance(cursor, dict):
-                    return {}
-                match = next((k for k in cursor.keys() if str(k).lower() == str(seg).lower()), None)
-                if match is None:
-                    return {}
-                cursor = cursor[match]
-            return cursor if isinstance(cursor, dict) else {}
-
-        for category in category_units:
-            if category not in self.metric_descriptions:
-                continue
-
-            unit = category_units[category]
-            radar_info = radar_metrics.get(category, {})
-            lower_is_better = radar_info.get('lower_is_better', None)
-            direction = '↓ lower is better' if lower_is_better is True else '↑ higher is better' if lower_is_better is False else ''
-
-            with st.expander(f'{category}   ·   {unit}   ·   {direction}', expanded=False):
-                st.markdown(self.metric_descriptions[category]['description'])
-
-                if self._env_data:
-                    st.divider()
-                    cols = st.columns(len(self._env_data))
-                    for col, (lidar_name, lidar_data) in zip(cols, self._env_data.items()):
-                        case_data = resolve_case(lidar_data)
-                        cat_data = case_data.get(category, {})
-                        with col:
-                            st.markdown(f'**{lidar_name}**')
-                            if cat_data:
-                                for key, val in cat_data.items():
-                                    display = f'{val:.4g}' if isinstance(val, float) else str(val)
-                                    st.markdown(f'`{key}`: {display}')
-                            else:
-                                st.markdown('_No data_')
-
     def render_comparison_graphs(self):
         st.markdown(self.visualization_handler.glow_css, unsafe_allow_html=True)
         all_lidars = list(self._env_data.keys())
@@ -973,8 +944,8 @@ class PolyViewApp:
 
         st.markdown(
             f'<div style="display:flex; gap:16px; flex-wrap:wrap; margin:16px 0 8px;">'
-            f'{_case_chip(tag_a, case_a_label, CASE_COLORS[0])}'
-            f'{_case_chip(tag_b, case_b_label, CASE_COLORS[1])}'
+            f'{_case_chip(tag_a, case_a_label, self.CASE_COLORS[0])}'
+            f'{_case_chip(tag_b, case_b_label, self.CASE_COLORS[1])}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1018,11 +989,11 @@ class PolyViewApp:
                 if zone in score_a:
                     detail[case_a_label] = score_a[zone]['detail']
                     cat[case_a_label] = score_a[zone]['category']
-                    radar_colors.append(CASE_COLORS[0])
+                    radar_colors.append(self.CASE_COLORS[0])
                 if zone in score_b:
                     detail[case_b_label] = score_b[zone]['detail']
                     cat[case_b_label] = score_b[zone]['category']
-                    radar_colors.append(CASE_COLORS[1])
+                    radar_colors.append(self.CASE_COLORS[1])
                 if cat:
                     tri = self.visualization_handler.make_abstract_radar_figure(f'{zone_title} · Category Scores', cat, radar_colors)
                     st.plotly_chart(tri, use_container_width=True, key=f'cmp_category_radar_{zone}')
@@ -1044,9 +1015,9 @@ class PolyViewApp:
                         _group_heading(current_group.replace('_', ' '))
                     rows = []
                     if va is not None:
-                        rows.append((_row_label(case_a_lidar, case_a_part, CASE_COLORS[0]), va))
+                        rows.append((_row_label(case_a_lidar, case_a_part, self.CASE_COLORS[0]), va))
                     if vb is not None:
-                        rows.append((_row_label(lidar_b, case_b_part, CASE_COLORS[1]), vb))
+                        rows.append((_row_label(lidar_b, case_b_part, self.CASE_COLORS[1]), vb))
                     fig = self.visualization_handler.make_bullet_figure(
                         title=spec['label'], rows=rows,
                         bands=self._scaled_bands(spec['raw_bands'], spec['is_frac']),
@@ -1102,28 +1073,16 @@ class PolyViewApp:
                 time.sleep(1)  # Simulate loading time
             st.success("Data refreshed!")
 
-    def render_lidars_markdown(self):
-        self.selected_lidar = st.selectbox('Select LiDAR', options=list(self._env_data.keys()))
-
-
     def _load_thresholds(self) -> dict:
-        defaults_path = Path(__file__).parent / 'defaults.yaml'
-        defaults = {}
-        if defaults_path.exists():
-            with open(defaults_path, 'r') as f:
-                defaults = (yaml.safe_load(f) or {}).get('thresholds', {})
+        defaults = self._thresholds_file.get('thresholds', {}) or {}
         user_overrides = self._settings.get('thresholds', {}) or {}
         return {**defaults, **user_overrides}
 
     def _load_abstract_thresholds(self) -> dict:
-        """Abstract thresholds from defaults.yaml, with any per-category overrides
+        """Abstract thresholds from thresholds.yaml, with any per-category overrides
         saved in settings.yaml taking precedence (the Settings page writes there,
-        so defaults.yaml stays the documented baseline)."""
-        defaults_path = Path(__file__).parent / 'defaults.yaml'
-        base = {}
-        if defaults_path.exists():
-            with open(defaults_path, 'r') as f:
-                base = (yaml.safe_load(f) or {}).get('abstract_thresholds', {})
+        so thresholds.yaml stays the documented baseline)."""
+        base = self._thresholds_file.get('abstract_thresholds', {}) or {}
         override = self._settings.get('abstract_thresholds', {}) or {}
         return {**base, **override}
 
@@ -1142,7 +1101,7 @@ class PolyViewApp:
         )
         abstract_thresholds = st.session_state.abstract_thresholds
         if not abstract_thresholds:
-            st.info('No metric thresholds defined in defaults.yaml.')
+            st.info('No metric thresholds defined in thresholds.yaml.')
             return
 
         band_names = ('great', 'ok', 'bad')
@@ -1225,6 +1184,7 @@ class PolyViewApp:
         st.session_state.env_names = self.database_handler.retrieve_environments()
         st.session_state.metrics_data = {}
         st.session_state.visualization_data = {}
+
 
 
 
